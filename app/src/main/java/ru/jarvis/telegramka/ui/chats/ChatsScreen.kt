@@ -1,6 +1,13 @@
 package ru.jarvis.telegramka.ui.chats
 
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -46,6 +53,7 @@ import ru.jarvis.telegramka.data.Chat
 import ru.jarvis.telegramka.data.MockData
 import ru.jarvis.telegramka.navigation.Screen
 import ru.jarvis.telegramka.ui.login.GradientButton
+import ru.jarvis.telegramka.ui.theme.AppMotion
 import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
 import java.text.SimpleDateFormat
 import java.util.*
@@ -70,7 +78,6 @@ fun ChatsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -137,26 +144,39 @@ fun ChatsScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            TextField(
-                value = searchQuery,
-                onValueChange = { viewModel.onSearchQueryChanged(it) },
-                placeholder = { Text("Поиск чатов...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                )
-            )
         }
-
+        Spacer(modifier = Modifier.height(16.dp))
+        TextField(
+            value = searchQuery,
+            onValueChange = { viewModel.onSearchQueryChanged(it) },
+            placeholder = { Text("Поиск чатов...") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            )
+        )
         AnimatedContent(
             targetState = filteredChats.isEmpty(),
-            transitionSpec = { fadeIn() togetherWith fadeOut() }
+            transitionSpec = {
+                (
+                    fadeIn(animationSpec = tween(AppMotion.ContentDuration)) +
+                        slideInVertically(
+                            animationSpec = tween(AppMotion.ContentDuration),
+                            initialOffsetY = { it / 16 }
+                        )
+                    ) togetherWith (
+                    fadeOut(animationSpec = tween(AppMotion.ExitDuration)) +
+                        slideOutVertically(
+                            animationSpec = tween(AppMotion.ExitDuration),
+                            targetOffsetY = { -(it / 24) }
+                        )
+                    )
+            }
         ) { isEmpty ->
             if (isEmpty) {
                 EmptyChatsView(onAddContact = { showDialog = true })
@@ -176,7 +196,7 @@ fun ChatsScreen(
         AddContactDialog(
             onDismiss = { showDialog = false },
             onConfirm = { nickname ->
-                if(viewModel.onAddChat(nickname)) {
+                if (viewModel.onAddChat(nickname)) {
                     showDialog = false
                 }
             }
@@ -332,12 +352,30 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
 @Composable
 fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var nickname by remember { mutableStateOf("") }
+    var scrimVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        scrimVisible = true
+    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center
+        ) {
+            AnimatedVisibility(
+                visible = scrimVisible,
+                enter = fadeIn(animationSpec = tween(durationMillis = 220))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.6f))
+                )
+            }
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -363,7 +401,7 @@ fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
                         onValueChange = { nickname = it },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("Введите @nickname") },
-                        label = {Text("Никнейм")},
+                        label = { Text("Никнейм") },
                         shape = RoundedCornerShape(12.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -382,6 +420,14 @@ fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun AddContactDialogPreview() {
+    TelegramkaTheme {
+        AddContactDialog(onDismiss = {}, onConfirm = {})
     }
 }
 

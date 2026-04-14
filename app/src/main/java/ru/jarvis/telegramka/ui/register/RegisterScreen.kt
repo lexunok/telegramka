@@ -1,8 +1,6 @@
 package ru.jarvis.telegramka.ui.register
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +26,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import ru.jarvis.telegramka.navigation.Screen
 import ru.jarvis.telegramka.ui.login.GradientButton
+import ru.jarvis.telegramka.ui.theme.AppMotion
 import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
 
 @Composable
@@ -53,7 +52,7 @@ fun RegisterScreen(
     ) {
         AnimatedVisibility(
             visible = visible,
-            enter = fadeIn(animationSpec = tween(durationMillis = 600)),
+            enter = AppMotion.screenEnter(),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
