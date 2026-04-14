@@ -157,9 +157,7 @@ fun RegisterScreen(
                 GradientButton(
                     onClick = {
                         viewModel.registerUser(name, email, nickname)
-                        navController.navigate(Screen.Chats.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                        }
+                        navController.navigate(Screen.Verify.createRoute(email))
                     },
                     enabled = name.isNotBlank() && nickname.isNotBlank()
                 ) {

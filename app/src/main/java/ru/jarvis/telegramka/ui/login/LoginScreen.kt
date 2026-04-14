@@ -122,9 +122,7 @@ fun LoginScreen(
                 GradientButton(
                     onClick = {
                         if (viewModel.userExists(email)) {
-                            navController.navigate(Screen.Chats.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
-                            }
+                            navController.navigate(Screen.Verify.createRoute(email))
                         } else {
                             navController.navigate(Screen.Register.createRoute(email))
                         }

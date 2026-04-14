@@ -16,6 +16,7 @@ import ru.jarvis.telegramka.ui.chat.ChatScreen
 import ru.jarvis.telegramka.ui.chats.ChatsScreen
 import ru.jarvis.telegramka.ui.login.LoginScreen
 import ru.jarvis.telegramka.ui.register.RegisterScreen
+import ru.jarvis.telegramka.ui.verify.VerifyCodeScreen
 
 private val NavigationEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 private const val NavigationDuration = 280
@@ -64,6 +65,14 @@ fun AppNavigation() {
         ) { backStackEntry ->
             backStackEntry.arguments?.getString("email")?.let { email ->
                 RegisterScreen(navController, email)
+            }
+        }
+        composable(
+            route = Screen.Verify.route,
+            arguments = listOf(navArgument("email") { type = NavType.StringType })
+        ) { backStackEntry ->
+            backStackEntry.arguments?.getString("email")?.let { email ->
+                VerifyCodeScreen(navController, email)
             }
         }
         composable(
