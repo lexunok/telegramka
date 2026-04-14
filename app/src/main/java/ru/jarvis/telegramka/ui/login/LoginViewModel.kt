@@ -1,11 +1,15 @@
 package ru.jarvis.telegramka.ui.login
 
+import android.util.Patterns
 import androidx.lifecycle.ViewModel
 import ru.jarvis.telegramka.data.MockData
 
 class LoginViewModel : ViewModel() {
-    fun userExists(phone: String): Boolean {
-        // In a real app, this would be a network call to your backend
-        return MockData.chats.any { it.phone == phone }
+    fun userExists(email: String): Boolean {
+        return MockData.allUsers.any { it.email.equals(email, ignoreCase = true) }
+    }
+
+    fun isEmailValid(email: String): Boolean {
+        return Patterns.EMAIL_ADDRESS.matcher(email).matches()
     }
 }

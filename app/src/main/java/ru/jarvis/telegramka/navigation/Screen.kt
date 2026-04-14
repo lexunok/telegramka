@@ -2,8 +2,8 @@ package ru.jarvis.telegramka.navigation
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
-    object Register : Screen("register/{phone}") {
-        fun createRoute(phone: String) = "register/$phone"
+    object Register : Screen("register/{email}") {
+        fun createRoute(email: String) = "register/$email"
     }
     object Chats : Screen("chats")
     object Chat : Screen("chat/{chatId}") {

@@ -1,11 +1,11 @@
 package ru.jarvis.telegramka.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -13,20 +13,37 @@ import androidx.core.view.WindowCompat
 private val DarkColorScheme = darkColorScheme(
     primary = Primary,
     onPrimary = PrimaryForeground,
+    primaryContainer = Accent,
+    onPrimaryContainer = AccentForeground,
+    inversePrimary = Primary,
     secondary = Secondary,
-    onSecondary = Foreground,
+    onSecondary = SecondaryForeground,
+    secondaryContainer = Muted,
+    onSecondaryContainer = MutedForeground,
+    tertiary = Accent,
+    onTertiary = AccentForeground,
+    tertiaryContainer = Muted,
+    onTertiaryContainer = MutedForeground,
     background = Background,
     onBackground = Foreground,
     surface = Card,
-    onSurface = Foreground,
-    surfaceVariant = InputBackground,
-    onSurfaceVariant = Foreground,
-    outline = Border
+    onSurface = CardForeground,
+    surfaceVariant = Popover,
+    onSurfaceVariant = PopoverForeground,
+    surfaceTint = Primary,
+    inverseSurface = Primary,
+    inverseOnSurface = PrimaryForeground,
+    error = Destructive,
+    onError = DestructiveForeground,
+    errorContainer = Destructive,
+    onErrorContainer = DestructiveForeground,
+    outline = Border,
+    outlineVariant = Input,
+    scrim = Color.Black,
 )
 
 @Composable
 fun TelegramkaTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = DarkColorScheme
@@ -34,8 +51,8 @@ fun TelegramkaTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+            window.statusBarColor = colorScheme.background.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
     }
 

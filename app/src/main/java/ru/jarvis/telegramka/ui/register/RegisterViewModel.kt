@@ -5,12 +5,11 @@ import ru.jarvis.telegramka.data.MockData
 import ru.jarvis.telegramka.data.User
 
 class RegisterViewModel : ViewModel() {
-    fun registerUser(name: String, phone: String) {
-        // In a real app, this would be a network call
-        // For now, we just update the mock current user
-        MockData.currentUser.let {
-            // This is not how you should do it, but for mock purposes it is fine
-            // In a real app you would have a proper user management
-        }
+    fun registerUser(name: String, email: String, nickname: String) {
+        // In a real app, this would be a network call to create a new user.
+        // For mock purposes, we can't easily modify the currentUser singleton from MockData.
+        // We will just assume the navigation to ChatsScreen implies a successful "login"
+        // with the new user details. The mock data source is not designed to be mutable here.
+        println("Registering user: $name, $email, $nickname")
     }
 }

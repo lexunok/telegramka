@@ -20,10 +20,10 @@ fun AppNavigation() {
         }
         composable(
             route = Screen.Register.route,
-            arguments = listOf(navArgument("phone") { type = NavType.StringType })
+            arguments = listOf(navArgument("email") { type = NavType.StringType })
         ) { backStackEntry ->
-            backStackEntry.arguments?.getString("phone")?.let { phone ->
-                RegisterScreen(navController, phone)
+            backStackEntry.arguments?.getString("email")?.let { email ->
+                RegisterScreen(navController, email)
             }
         }
         composable(Screen.Chats.route) {

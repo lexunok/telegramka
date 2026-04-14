@@ -2,13 +2,23 @@ package ru.jarvis.telegramka.data
 
 object MockData {
 
-    val currentUser = User("current-user", "Lex", "+79991234567")
+    val currentUser = User("current-user", "Lex", "lex@example.com", "@lex")
+
+    // Let's create a list of all users in the system for finding by nickname
+    val allUsers = listOf(
+        currentUser,
+        User("1", "Alice", "alice@example.com", "@alice"),
+        User("2", "Bob", "bob@example.com", "@bob"),
+        User("3", "Charlie", "charlie@example.com", "@charlie"),
+        User("4", "David", "david@example.com", "@david")
+    )
+
 
     val chats = listOf(
         Chat(
             id = "1",
             name = "Alice",
-            phone = "+1234567890",
+            nickname = "@alice",
             lastMessage = "Hey, how are you?",
             lastMessageTime = System.currentTimeMillis() - 1000 * 60 * 5,
             unread = 2,
@@ -17,7 +27,7 @@ object MockData {
         Chat(
             id = "2",
             name = "Bob",
-            phone = "+1987654321",
+            nickname = "@bob",
             lastMessage = "See you tomorrow!",
             lastMessageTime = System.currentTimeMillis() - 1000 * 60 * 60 * 2,
             avatarUrl = "https://i.pravatar.cc/150?u=bob"
@@ -25,7 +35,7 @@ object MockData {
         Chat(
             id = "3",
             name = "Charlie",
-            phone = "+1122334455",
+            nickname = "@charlie",
             lastMessage = "Thanks!",
             lastMessageTime = System.currentTimeMillis() - 1000 * 60 * 60 * 24,
             avatarUrl = "https://i.pravatar.cc/150?u=charlie"

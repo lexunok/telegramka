@@ -3,7 +3,7 @@ package ru.jarvis.telegramka.data
 data class Chat(
     val id: String,
     val name: String,
-    val phone: String,
+    val nickname: String,
     val lastMessage: String? = null,
     val lastMessageTime: Long? = null,
     val unread: Int? = null,

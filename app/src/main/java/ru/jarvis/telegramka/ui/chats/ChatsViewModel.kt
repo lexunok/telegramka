@@ -17,13 +17,21 @@ class ChatsViewModel : ViewModel() {
         _searchQuery.value = query
     }
 
-    fun onAddChat(name: String, phone: String) {
-        val newChat = Chat(
-            id = (chats.value.size + 1).toString(),
-            name = name,
-            phone = phone,
-            avatarUrl = "https://i.pravatar.cc/150?u=$name"
-        )
-        _chats.value = _chats.value + newChat
+    fun onAddChat(nickname: String) : Boolean {
+        val userToAdd = MockData.allUsers.find { it.nickname.equals(nickname, ignoreCase = true) }
+        if (userToAdd != null) {
+            val chatExists = _chats.value.any { it.nickname.equals(nickname, ignoreCase = true) }
+            if (!chatExists) {
+                val newChat = Chat(
+                    id = userToAdd.id,
+                    name = userToAdd.name,
+                    nickname = userToAdd.nickname,
+                    avatarUrl = "https://i.pravatar.cc/150?u=${userToAdd.name}"
+                )
+                _chats.value = _chats.value + newChat
+                return true
+            }
+        }
+        return false
     }
 }
