@@ -14,6 +14,7 @@ sealed class AuthResult<out T> {
     data class Success<out T>(val data: T) : AuthResult<T>()
     data class Error(val message: String, val code: Int? = null) : AuthResult<Nothing>()
     object UserNotFound : AuthResult<Nothing>()
+    object Conflict : AuthResult<Nothing>() // New state for 409 Conflict
     object NetworkError : AuthResult<Nothing>()
 }
 
@@ -51,6 +52,7 @@ class AuthService {
 
             when (response.status) {
                 HttpStatusCode.OK -> AuthResult.Success(Unit)
+                HttpStatusCode.Conflict -> AuthResult.Conflict
                 else -> {
                     val errorResponse = response.body<ErrorResponse>()
                     AuthResult.Error(errorResponse.error, response.status.value)
