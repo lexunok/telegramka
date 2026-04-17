@@ -1,715 +1,231 @@
-# Telegramka Backend API
+### Общая информация
 
-## Purpose
-
-This document describes the server-side API required to replace the current mock data in the Android client.
-
-Current client flow:
-
-1. User enters email on login screen.
-2. If user exists, app opens code verification screen.
-3. If user does not exist, app opens registration screen.
-4. After registration, app opens code verification screen.
-5. After successful code verification, app opens chats list.
-6. User can:
-   - load chats
-   - search chats locally
-   - open a chat
-   - load messages
-   - send messages
-   - add a chat by another user's nickname
-
-This spec is intentionally pragmatic: it covers what the current app needs now, plus a small amount of near-term structure so the backend contract does not need to be redesigned immediately.
-
-## General Requirements
-
-- Protocol: HTTPS
-- Base path: `/api/v1`
-- Format: JSON
-- Auth: `Authorization: Bearer <access_token>`
-- Time format: Unix timestamp in milliseconds
-- IDs: string UUIDs or opaque string IDs
-- Pagination: cursor-based where lists can grow
-
-## Error Format
-
-All non-2xx responses should use a common shape:
-
-```json
-{
-  "error": {
-    "code": "USER_NOT_FOUND",
-    "message": "User with this email was not found",
-    "details": null
+- **Базовый URL для всех REST запросов:** `/api`
+- **Аутентификация:** Большинство запросов требуют аутентификации. Для этого необходимо передавать `access_token` в заголовке `Authorization` со схемой `Bearer`.
+   - `Authorization: Bearer <ваш_access_token>`
+- **Формат ошибок:** В случае ошибки сервер вернёт JSON-объект с полем `error`.
+  ```json
+  {
+    "error": "Сообщение об ошибке"
   }
-}
-```
+  ```
 
-Recommended error codes:
+---
 
-- `VALIDATION_ERROR`
-- `UNAUTHORIZED`
-- `FORBIDDEN`
-- `USER_NOT_FOUND`
-- `USER_ALREADY_EXISTS`
-- `INVALID_CODE`
-- `CODE_EXPIRED`
-- `CHAT_NOT_FOUND`
-- `MESSAGE_NOT_FOUND`
-- `CONTACT_NOT_FOUND`
-- `CONTACT_ALREADY_EXISTS`
-- `RATE_LIMITED`
-- `INTERNAL_ERROR`
+### 1. Аутентификация
 
-## Core Models
+Все эндпоинты этой группы находятся по пути `/api/auth`.
 
-### User
-
-```json
-{
-  "id": "usr_123",
-  "name": "Lex",
-  "email": "lex@example.com",
-  "nickname": "@lex",
-  "avatar_url": "https://cdn.example.com/avatar/usr_123.jpg",
-  "created_at": 1760000000000
-}
-```
-
-Fields:
-
-- `id`: unique user id
-- `name`: display name
-- `email`: unique email
-- `nickname`: unique public nickname, stored with leading `@`
-- `avatar_url`: nullable
-- `created_at`: account creation timestamp
-
-### Auth Session
-
-```json
-{
-  "access_token": "jwt-or-random-token",
-  "refresh_token": "refresh-token",
-  "expires_in": 3600,
-  "user": {
-    "id": "usr_123",
-    "name": "Lex",
-    "email": "lex@example.com",
-    "nickname": "@lex",
-    "avatar_url": null,
-    "created_at": 1760000000000
+#### **Регистрация**
+- **`POST /api/auth/register`**
+- **Описание:** Создаёт нового пользователя, но не авторизует его. После успешной регистрации на указанный email будет отправлен код верификации.
+- **Тело запроса (`application/json`):**
+  ```json
+  {
+    "name": "string",
+    "email": "string (валидный email)",
+    "nickname": "string"
   }
-}
-```
+  ```
+- **Ответ:**
+   - `200 OK`: Пустое тело, если запрос принят.
 
-### Chat
-
-Matches the current client model.
-
-```json
-{
-  "id": "chat_123",
-  "name": "Alice",
-  "nickname": "@alice",
-  "last_message": "Hey, how are you?",
-  "last_message_time": 1760000000000,
-  "unread": 2,
-  "avatar_url": "https://cdn.example.com/avatar/usr_456.jpg"
-}
-```
-
-Notes:
-
-- Current app treats a chat like a direct dialog preview.
-- `name`, `nickname`, and `avatar_url` currently describe the other user in a private chat.
-- Backend should still store normalized chat/member data internally even if response is flattened for the client.
-
-### Message
-
-```json
-{
-  "id": "msg_123",
-  "chat_id": "chat_123",
-  "sender_id": "usr_123",
-  "text": "Hello",
-  "timestamp": 1760000000000
-}
-```
-
-## Authentication Flow
-
-The current app uses email + verification code. No password flow is needed right now.
-
-### 1. Check whether user exists
-
-`POST /auth/check-email`
-
-Request:
-
-```json
-{
-  "email": "lex@example.com"
-}
-```
-
-Response:
-
-```json
-{
-  "exists": true
-}
-```
-
-Purpose:
-
-- Used on login screen before deciding whether to go to registration or code verification
-
-### 2. Register new user
-
-`POST /auth/register`
-
-Request:
-
-```json
-{
-  "name": "Lex",
-  "email": "lex@example.com",
-  "nickname": "@lex"
-}
-```
-
-Response:
-
-```json
-{
-  "user": {
-    "id": "usr_123",
-    "name": "Lex",
-    "email": "lex@example.com",
-    "nickname": "@lex",
-    "avatar_url": null,
-    "created_at": 1760000000000
-  },
-  "verification": {
-    "delivery": "email",
-    "cooldown_seconds": 60
+#### **Запрос кода верификации (Логин)**
+- **`POST /api/auth/login`**
+- **Описание:** Инициирует процесс входа. Если пользователь с таким email существует, ему будет отправлен код верификации.
+- **Тело запроса (`application/json`):**
+  ```json
+  {
+    "email": "string"
   }
-}
-```
+  ```
+- **Ответ:**
+   - `200 OK`: Пустое тело, если запрос принят.
 
-Rules:
-
-- `email` must be unique
-- `nickname` must be unique
-- if nickname is stored with leading `@`, backend should normalize it
-- registration should trigger sending a verification code to email
-
-### 3. Send verification code
-
-`POST /auth/send-code`
-
-Request:
-
-```json
-{
-  "email": "lex@example.com",
-  "purpose": "login"
-}
-```
-or
-```json
-{
-  "email": "lex@example.com",
-  "purpose": "registration"
-}
-```
-
-Response:
-
-```json
-{
-  "sent": true,
-  "cooldown_seconds": 60
-}
-```
-
-Purpose:
-
-- Existing user flow: send code before opening verification screen
-- New user flow: may be triggered automatically by `/auth/register`
-- Also supports resend later
-
-### 4. Verify code and create session
-
-`POST /auth/verify-code`
-
-Request:
-
-```json
-{
-  "email": "lex@example.com",
-  "code": "123456"
-}
-```
-
-Response:
-
-```json
-{
-  "access_token": "jwt-or-random-token",
-  "refresh_token": "refresh-token",
-  "expires_in": 3600,
-  "user": {
-    "id": "usr_123",
-    "name": "Lex",
-    "email": "lex@example.com",
-    "nickname": "@lex",
-    "avatar_url": null,
-    "created_at": 1760000000000
+#### **Подтверждение кода**
+- **`POST /api/auth/verify-code`**
+- **Описание:** Проверяет код верификации, и в случае успеха возвращает пару токенов (access и refresh) и данные пользователя.
+- **Тело запроса (`application/json`):**
+  ```json
+  {
+    "email": "string",
+    "code": "string"
   }
-}
-```
-
-Purpose:
-
-- Completes both login and registration flow
-- App enters authenticated state and opens chats
-
-### 5. Refresh session
-
-`POST /auth/refresh`
-
-Request:
-
-```json
-{
-  "refresh_token": "refresh-token"
-}
-```
-
-Response:
-
-```json
-{
-  "access_token": "new-access-token",
-  "refresh_token": "new-refresh-token",
-  "expires_in": 3600
-}
-```
-
-### 6. Logout
-
-`POST /auth/logout`
-
-Headers:
-
-- `Authorization: Bearer <access_token>`
-
-Request:
-
-```json
-{
-  "refresh_token": "refresh-token"
-}
-```
-
-Response:
-
-```json
-{
-  "ok": true
-}
-```
-
-## Account and User Endpoints
-
-### Get current user
-
-`GET /me`
-
-Response:
-
-```json
-{
-  "id": "usr_123",
-  "name": "Lex",
-  "email": "lex@example.com",
-  "nickname": "@lex",
-  "avatar_url": null,
-  "created_at": 1760000000000
-}
-```
-
-### Update current user
-
-`PATCH /me`
-
-Request:
-
-```json
-{
-  "name": "Lex",
-  "nickname": "@lex"
-}
-```
-
-Response:
-
-```json
-{
-  "id": "usr_123",
-  "name": "Lex",
-  "email": "lex@example.com",
-  "nickname": "@lex",
-  "avatar_url": null,
-  "created_at": 1760000000000
-}
-```
-
-### Find user by nickname
-
-`GET /users/by-nickname/{nickname}`
-
-Example:
-
-`GET /users/by-nickname/%40alice`
-
-Response:
-
-```json
-{
-  "id": "usr_456",
-  "name": "Alice",
-  "email": "alice@example.com",
-  "nickname": "@alice",
-  "avatar_url": "https://cdn.example.com/avatar/usr_456.jpg",
-  "created_at": 1760000000000
-}
-```
-
-Purpose:
-
-- Needed for adding a new contact/chat by nickname
-
-## Chats
-
-### List chats
-
-`GET /chats`
-
-Query params:
-
-- `cursor` optional
-- `limit` optional, default `20`
-
-Response:
-
-```json
-{
-  "items": [
-    {
-      "id": "chat_123",
-      "name": "Alice",
-      "nickname": "@alice",
-      "last_message": "Hey, how are you?",
-      "last_message_time": 1760000000000,
-      "unread": 2,
-      "avatar_url": "https://cdn.example.com/avatar/usr_456.jpg"
+  ```
+- **Успешный ответ (`200 OK`):**
+  ```json
+  {
+    "access_token": "string",
+    "refresh_token": "string",
+    "expires_in": 3600, // Срок жизни access_token в секундах
+    "user": {
+      "id": "uuid",
+      "name": "string",
+      "email": "string",
+      "nickname": "string",
+      "avatar_url": "string | null",
+      "created_at": "string (RFC3339 / ISO8601)"
     }
-  ],
-  "next_cursor": null
-}
-```
+  }
+  ```
 
-Purpose:
+#### **Обновление токена**
+- **`POST /api/auth/refresh`**
+- **Аутентификация:** **Требуется.**
+- **Описание:** Позволяет получить новую пару токенов, используя `refresh_token`.
+- **Тело запроса (`application/json`):**
+  ```json
+  {
+    "refresh_token": "string"
+  }
+  ```
+- **Успешный ответ (`200 OK`):**
+  ```json
+  {
+    "access_token": "string",
+    "refresh_token": "string",
+    "expires_in": 3600
+  }
+  ```
 
-- Fills chats list screen
-- Current search in the app is local; server-side search is optional for now
+---
 
-### Create or open private chat by nickname
+### 2. Профиль
 
-`POST /chats`
+Эндпоинты для работы с профилем текущего пользователя.
 
-Request:
+#### **Получить мой профиль**
+- **`GET /api/profile`**
+- **Аутентификация:** **Требуется.**
+- **Описание:** Возвращает данные о текущем авторизованном пользователе.
+- **Успешный ответ (`200 OK`):**
+  ```json
+  {
+    "id": "uuid",
+    "name": "string",
+    "email": "string",
+    "nickname": "string",
+    "avatar_url": "string | null",
+    "created_at": "string (RFC3339 / ISO8601)"
+  }
+  ```
 
-```json
-{
-  "nickname": "@alice"
-}
-```
+---
 
-Response:
+### 3. Пользователи
 
-```json
-{
-  "chat": {
-    "id": "chat_123",
-    "name": "Alice",
-    "nickname": "@alice",
-    "last_message": null,
-    "last_message_time": null,
-    "unread": 0,
-    "avatar_url": "https://cdn.example.com/avatar/usr_456.jpg"
-  },
-  "created": true
-}
-```
+#### **Найти пользователя по никнейму**
+- **`GET /api/users/by-nickname/{nickname}`**
+- **Аутентификация:** Не требуется.
+- **Описание:** Возвращает публичные данные о пользователе по его никнейму.
+- **Параметры пути:**
+   - `{nickname}`: `string`
+- **Успешный ответ (`200 OK`):**
+  ```json
+  {
+    "id": "uuid",
+    "name": "string",
+    "email": "string",
+    "nickname": "string",
+    "avatar_url": "string | null",
+    "created_at": "string (RFC3339 / ISO8601)"
+  }
+  ```
 
-Behavior:
+---
 
-- If private chat already exists, return existing chat with `created: false`
-- If target nickname does not exist, return `404 CONTACT_NOT_FOUND`
-- If user tries to add themselves, return validation error
+### 4. Чаты и сообщения
 
-### Get chat details
-
-`GET /chats/{chat_id}`
-
-Response:
-
-```json
-{
-  "id": "chat_123",
-  "name": "Alice",
-  "nickname": "@alice",
-  "last_message": "Hey, how are you?",
-  "last_message_time": 1760000000000,
-  "unread": 2,
-  "avatar_url": "https://cdn.example.com/avatar/usr_456.jpg"
-}
-```
-
-Purpose:
-
-- Used when chat screen opens and header needs peer info
-
-### Mark chat as read
-
-`POST /chats/{chat_id}/read`
-
-Request:
-
-```json
-{
-  "read_through_message_id": "msg_999"
-}
-```
-
-Response:
-
-```json
-{
-  "ok": true,
-  "unread": 0
-}
-```
-
-Purpose:
-
-- Keeps unread counters accurate
-
-## Messages
-
-### List messages
-
-`GET /chats/{chat_id}/messages`
-
-Query params:
-
-- `cursor` optional
-- `limit` optional, default `50`
-
-Response:
-
-```json
-{
-  "items": [
+#### **Получить список чатов**
+- **`GET /api/chats`**
+- **Аутентификация:** **Требуется.**
+- **Описание:** Возвращает список чатов для текущего пользователя.
+- **Успешный ответ (`200 OK`):**
+  ```json
+  [
     {
-      "id": "msg_123",
-      "chat_id": "chat_123",
-      "sender_id": "usr_123",
-      "text": "Hello",
-      "timestamp": 1760000000000
+      "id": "uuid",
+      "name": "string", // Имя собеседника или название чата
+      "nickname": "string", // Никнейм собеседника
+      "last_message": "string | null",
+      "last_message_time": "string (RFC3339) | null",
+      "unread": "integer", // Количество непрочитанных сообщений
+      "avatar_url": "string | null"
     }
-  ],
-  "next_cursor": null
-}
-```
+  ]
+  ```
 
-Notes:
+#### **Получить историю сообщений чата**
+- **`GET /api/chats/{chat_id}/messages`**
+- **Аутентификация:** **Требуется.**
+- **Описание:** Возвращает список сообщений для указанного чата. Поддерживает пагинацию.
+- **Параметры пути:**
+   - `{chat_id}`: `uuid`
+- **Query параметры:**
+   - `before`: `string (RFC3339)` - загрузить сообщения до указанной даты.
+   - `limit`: `integer` - количество сообщений для загрузки (по умолчанию, вероятно, установлено на сервере).
+- **Успешный ответ (`200 OK`):**
+  ```json
+  [
+    {
+      "id": "uuid",
+      "chat_id": "uuid",
+      "sender_id": "uuid",
+      "text": "string",
+      "created_at": "string (RFC3339)"
+    }
+  ]
+  ```
 
-- Client currently renders messages as a flat list
-- Results should be returned in chronological order
-- Client can reverse locally if needed
-
-### Send message
-
-`POST /chats/{chat_id}/messages`
-
-Request:
-
-```json
-{
-  "text": "Hello"
-}
-```
-
-Response:
-
-```json
-{
-  "message": {
-    "id": "msg_124",
-    "chat_id": "chat_123",
-    "sender_id": "usr_123",
-    "text": "Hello",
-    "timestamp": 1760000005000
-  },
-  "chat": {
-    "id": "chat_123",
-    "name": "Alice",
-    "nickname": "@alice",
-    "last_message": "Hello",
-    "last_message_time": 1760000005000,
-    "unread": 0,
-    "avatar_url": "https://cdn.example.com/avatar/usr_456.jpg"
+#### **Отправить сообщение**
+- **`POST /api/chats/{chat_id}/messages`**
+- **Аутентификация:** **Требуется.**
+- **Описание:** Отправляет новое сообщение в чат. Отправленное сообщение также будет транслироваться через WebSocket всем участникам чата.
+- **Параметры пути:**
+   - `{chat_id}`: `uuid`
+- **Тело запроса (`application/json`):**
+  ```json
+  {
+    "text": "string"
   }
-}
-```
-
-Purpose:
-
-- Adds a message
-- Returns updated chat preview so chat list can stay in sync
-
-### Optional future endpoints
-
-Not required for current client, but likely next:
-
-- `PATCH /messages/{message_id}` edit message
-- `DELETE /messages/{message_id}` delete message
-- attachments upload
-- reactions
-- typing status
-- delivery and read receipts per message
-
-## Suggested Realtime Support
-
-The current client can work with plain REST, but chat will quickly need realtime updates.
-
-Recommended:
-
-- WebSocket: `GET /ws`
-- Auth via bearer token during connect
-
-Server events:
-
-- `message.created`
-- `message.updated`
-- `message.deleted`
-- `chat.updated`
-- `chat.read`
-- `user.presence`
-
-Example event:
-
-```json
-{
-  "type": "message.created",
-  "payload": {
-    "id": "msg_124",
-    "chat_id": "chat_123",
-    "sender_id": "usr_456",
-    "text": "Hi",
-    "timestamp": 1760000005000
+  ```
+- **Успешный ответ (`200 OK`):**
+  ```json
+  {
+    "id": "uuid",
+    "chat_id": "uuid",
+    "sender_id": "uuid",
+    "text": "string",
+    "created_at": "string (RFC3339)"
   }
-}
-```
+  ```
 
-## Validation Rules
+---
 
-### Email
+### 5. Статические файлы
 
-- required
-- valid email format
-- case-insensitive uniqueness
+#### **Получить аватар пользователя**
+- **`GET /api/images/avatar/{filename}`**
+- **Описание:** Возвращает файл аватара. Имя файла (`filename`) берётся из поля `avatar_url` в объекте пользователя (`UserDto`).
 
-### Name
+---
 
-- required
-- trimmed
-- length 2..64
+### 6. WebSocket API
 
-### Nickname
-
-- required
-- unique
-- normalized to start with `@`
-- allowed chars: latin letters, digits, underscore
-- recommended length 3..32 excluding `@`
-
-### Verification Code
-
-- numeric
-- 6 digits
-- expires, recommended TTL `10 minutes`
-- resend cooldown, recommended `60 seconds`
-- rate limits per email and IP
-
-### Message Text
-
-- required
-- trimmed
-- max length, recommended `4000`
-
-## Security and Operational Requirements
-
-- rate limit `/auth/check-email`, `/auth/send-code`, `/auth/verify-code`
-- do not leak too much user enumeration data beyond current agreed flow
-- store refresh tokens securely and revoke on logout
-- audit login and verification attempts
-- sanitize all user-generated text
-- support idempotency for critical auth/code endpoints if needed
-
-## Minimum Backend Milestone
-
-To support the current app without mocks, the minimum required backend set is:
-
-1. `POST /auth/check-email`
-2. `POST /auth/register`
-3. `POST /auth/send-code`
-4. `POST /auth/verify-code`
-5. `GET /me`
-6. `GET /chats`
-7. `POST /chats`
-8. `GET /chats/{chat_id}`
-9. `GET /chats/{chat_id}/messages`
-10. `POST /chats/{chat_id}/messages`
-
-## Mapping to Current Android Client
-
-Current client models in code:
-
-- `User`: `id`, `name`, `email`, `nickname`
-- `Chat`: `id`, `name`, `nickname`, `lastMessage`, `lastMessageTime`, `unread`, `avatarUrl`
-- `Message`: `id`, `chatId`, `senderId`, `text`, `timestamp`
-
-Client screens that depend on this API:
-
-- Login screen: email existence check
-- Register screen: account creation
-- Verify code screen: code confirmation and session start
-- Chats screen: fetch chats, add chat by nickname
-- Chat screen: fetch chat info, fetch messages, send message
-
-## Open Questions for Backend Implementation
-
-These are not blockers for writing the first version, but should be decided explicitly:
-
-- Will access tokens be JWT or opaque tokens?
-- Will chat ids be stable per pair of users for direct chats?
-- Should `/auth/check-email` remain explicit, or should auth flow be merged into one start-auth endpoint?
-- Will nickname search be exact only, or partial as well?
-- Should unread count be per-chat only, or also per-message read state?
-- Is message delivery realtime required in first release, or can polling be used initially?
+- **URL для подключения:** `ws://<адрес_сервера>/ws`
+- **Аутентификация:** Для подключения к WebSocket требуется передать валидный `access_token` в заголовке `Authorization`, как и для обычных HTTP-запросов.
+- **Получение сообщений от сервера:**
+   - Сервер будет присылать события `NewMessage`, когда кто-то отправляет сообщение в чат, в котором вы состоите.
+   - Клиент получит JSON-объект, соответствующий структуре `MessageDto`:
+     ```json
+     {
+       "id": "uuid",
+       "chat_id": "uuid",
+       "sender_id": "uuid",
+       "text": "string",
+       "created_at": "string (RFC3339)"
+     }
+     ```
+- **Отправка сообщений на сервер:**
+   - Текущая реализация сервера **не обрабатывает** входящие сообщения от клиента через WebSocket (например, события "печатает..." или отправку сообщений). Соединение поддерживается, но логики обработки нет.
+   - **Для отправки сообщений необходимо использовать REST эндпоинт `POST /api/chats/{chat_id}/messages`.**

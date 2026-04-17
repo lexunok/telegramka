@@ -7,9 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.PhoneIphone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,10 +23,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.flow.collectLatest
 import ru.jarvis.telegramka.navigation.Screen
 import ru.jarvis.telegramka.ui.theme.AppMotion
 import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
     navController: NavController,
@@ -40,108 +40,142 @@ fun LoginScreen(
         derivedStateOf { viewModel.isEmailValid(email) }
     }
 
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val navigationEvent by viewModel.navigationEvent.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(Unit) {
         visible = true
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = AppMotion.screenEnter(),
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            // Optionally, clear the error message in ViewModel after showing
+            // viewModel.clearErrorMessage() // if such a method exists
+        }
+    }
+
+    LaunchedEffect(navigationEvent) {
+        navigationEvent?.let { event ->
+            when (event) {
+                is LoginNavigationEvent.NavigateToVerifyCode -> {
+                    navController.navigate(Screen.Verify.createRoute(event.email))
+                }
+                is LoginNavigationEvent.NavigateToRegister -> {
+                    navController.navigate(Screen.Register.createRoute(event.email))
+                }
+            }
+            viewModel.consumeNavigationEvent()
+        }
+    }
+
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(paddingValues)
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
+            AnimatedVisibility(
+                visible = visible,
+                enter = AppMotion.screenEnter(),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                                )
                             )
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Phone,
+                            contentDescription = "Email Icon",
+                            tint = Color.White,
+                            modifier = Modifier.size(60.dp)
                         )
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Phone,
-                        contentDescription = "Email Icon",
-                        tint = Color.White,
-                        modifier = Modifier.size(60.dp)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "Telegramka",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.displayLarge,
+                        textAlign = TextAlign.Center
                     )
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(48.dp))
 
-                Text(
-                    text = "Telegramka",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.displayLarge,
-                    textAlign = TextAlign.Center
-                )
+                    Text(
+                        text = "E-mail",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp, start = 8.dp),
+                        textAlign = TextAlign.Start
+                    )
+                    TextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        textStyle = MaterialTheme.typography.bodyLarge,
+                        placeholder = { Text("example@email.com", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 4.dp)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedPlaceholderColor = MaterialTheme.colorScheme.background,
+                            unfocusedPlaceholderColor = MaterialTheme.colorScheme.background,
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                    )
 
-                Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                Text(
-                    text = "E-mail",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp, start = 8.dp),
-                    textAlign = TextAlign.Start
-                )
-                TextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    textStyle = MaterialTheme.typography.bodyLarge,
-                    placeholder = { Text("example@email.com", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 4.dp)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedPlaceholderColor = MaterialTheme.colorScheme.background,
-                        unfocusedPlaceholderColor = MaterialTheme.colorScheme.background,
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                GradientButton(
-                    onClick = {
-                        if (viewModel.userExists(email)) {
-                            navController.navigate(Screen.Verify.createRoute(email))
-                        } else {
-                            navController.navigate(Screen.Register.createRoute(email))
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                    } else {
+                        GradientButton(
+                            onClick = {
+                                viewModel.onLoginClicked(email)
+                            },
+                            enabled = isEmailValid
+                        ) {
+                            Text("Продолжить")
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null
+                            )
                         }
-                    },
-                    enabled = isEmailValid
-                ) {
-                    Text("Продолжить")
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "При первом входе будет создан новый аккаунт",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
                     )
                 }
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "При первом входе будет создан новый аккаунт",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
             }
         }
     }
