@@ -9,12 +9,12 @@ import ru.jarvis.telegramka.data.remote.model.ErrorResponse
 import ru.jarvis.telegramka.data.remote.model.LoginRequest
 import ru.jarvis.telegramka.data.remote.model.AuthResponse
 import ru.jarvis.telegramka.data.remote.model.RegisterRequest
+import ru.jarvis.telegramka.data.remote.model.VerifyCodeRequest
 
 sealed class AuthResult<out T> {
     data class Success<out T>(val data: T) : AuthResult<T>()
     data class Error(val message: String, val code: Int? = null) : AuthResult<Nothing>()
     object UserNotFound : AuthResult<Nothing>()
-    object Conflict : AuthResult<Nothing>() // New state for 409 Conflict
     object NetworkError : AuthResult<Nothing>()
 }
 
@@ -52,7 +52,6 @@ class AuthService {
 
             when (response.status) {
                 HttpStatusCode.OK -> AuthResult.Success(Unit)
-                HttpStatusCode.Conflict -> AuthResult.Conflict
                 else -> {
                     val errorResponse = response.body<ErrorResponse>()
                     AuthResult.Error(errorResponse.error, response.status.value)
@@ -68,7 +67,27 @@ class AuthService {
         return try {
             val response = client.post("$baseUrl/auth/verify-code") {
                 contentType(ContentType.Application.Json)
-                setBody(ru.jarvis.telegramka.data.remote.model.VerifyCodeRequest(email, code))
+                setBody(VerifyCodeRequest(email, code))
+            }
+
+            when (response.status) {
+                HttpStatusCode.OK -> AuthResult.Success(response.body<AuthResponse>())
+                else -> {
+                    val errorResponse = response.body<ErrorResponse>()
+                    AuthResult.Error(errorResponse.error, response.status.value)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            AuthResult.NetworkError
+        }
+    }
+
+    suspend fun refreshToken(refreshToken: String): AuthResult<AuthResponse> {
+        return try {
+            val response = client.post("$baseUrl/auth/refresh") {
+                contentType(ContentType.Application.Json)
+                setBody(mapOf("refresh_token" to refreshToken))
             }
 
             when (response.status) {
@@ -84,3 +103,4 @@ class AuthService {
         }
     }
 }
+

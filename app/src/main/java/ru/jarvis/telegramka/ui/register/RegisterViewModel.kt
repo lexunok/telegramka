@@ -33,9 +33,6 @@ class RegisterViewModel : ViewModel() {
                 is RegisterResult.Success -> {
                     _navigationEvent.value = RegisterNavigationEvent.NavigateToVerifyCode(email)
                 }
-                is RegisterResult.Conflict -> {
-                    _errorMessage.value = "Пользователь с такой почтой или никнеймом уже существует."
-                }
                 is RegisterResult.Error -> {
                     _errorMessage.value = result.message
                 }

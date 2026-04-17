@@ -1,7 +1,10 @@
 package ru.jarvis.telegramka.data.repository
 
+import io.ktor.client.plugins.auth.providers.BearerTokens
 import ru.jarvis.telegramka.data.remote.api.AuthResult
 import ru.jarvis.telegramka.data.remote.api.AuthService
+import ru.jarvis.telegramka.data.remote.model.UserDto
+import ru.jarvis.telegramka.data.storage.TokenManager
 
 sealed class LoginResult {
     object Success : LoginResult()
@@ -12,9 +15,20 @@ sealed class LoginResult {
 
 sealed class RegisterResult {
     object Success : RegisterResult()
-    object Conflict : RegisterResult() // New state for 409 Conflict
     data class Error(val message: String) : RegisterResult()
     object NetworkError : RegisterResult()
+}
+
+sealed class VerifyCodeResult {
+    data class Success(val user: UserDto) : VerifyCodeResult()
+    data class Error(val message: String) : VerifyCodeResult()
+    object NetworkError : VerifyCodeResult()
+}
+
+sealed class RefreshResult {
+    data class Success(val tokens: BearerTokens) : RefreshResult()
+    data class Error(val message: String) : RefreshResult()
+    object NetworkError : RefreshResult()
 }
 
 class AuthRepository(private val authService: AuthService) {
@@ -31,10 +45,37 @@ class AuthRepository(private val authService: AuthService) {
     suspend fun register(name: String, email: String, nickname: String): RegisterResult {
         return when (val result = authService.register(name, email, nickname)) {
             is AuthResult.Success -> RegisterResult.Success
-            is AuthResult.Conflict -> RegisterResult.Conflict
             is AuthResult.Error -> RegisterResult.Error(result.message)
             is AuthResult.NetworkError -> RegisterResult.NetworkError
-            else -> RegisterResult.Error("Неизвестная ошибка регистрации") // Should not happen with current AuthService
+            else -> RegisterResult.Error("Неизвестная ошибка регистрации")
+        }
+    }
+
+    suspend fun verifyCode(email: String, code: String): VerifyCodeResult {
+        return when (val result = authService.verifyCode(email, code)) {
+            is AuthResult.Success -> {
+                result.data.user?.let { user ->
+                    TokenManager.saveTokens(result.data.access_token, result.data.refresh_token)
+                    VerifyCodeResult.Success(user)
+                } ?: VerifyCodeResult.Error("Пользовательские данные отсутствуют в ответе")
+            }
+            is AuthResult.Error -> VerifyCodeResult.Error(result.message)
+            is AuthResult.NetworkError -> VerifyCodeResult.NetworkError
+            else -> VerifyCodeResult.Error("Неизвестная ошибка верификации кода")
+        }
+    }
+
+    suspend fun refreshToken(oldRefreshToken: String): RefreshResult {
+        return when (val result = authService.refreshToken(oldRefreshToken)) {
+            is AuthResult.Success -> {
+                val newAccessToken = result.data.access_token
+                val newRefreshToken = result.data.refresh_token
+                TokenManager.saveTokens(newAccessToken, newRefreshToken)
+                RefreshResult.Success(BearerTokens(newAccessToken, newRefreshToken))
+            }
+            is AuthResult.Error -> RefreshResult.Error(result.message)
+            is AuthResult.NetworkError -> RefreshResult.NetworkError
+            else -> RefreshResult.Error("Неизвестная ошибка обновления токена")
         }
     }
 }
