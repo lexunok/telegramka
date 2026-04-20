@@ -31,7 +31,7 @@ sealed class RefreshResult {
     object NetworkError : RefreshResult()
 }
 
-class AuthRepository(private val authService: AuthService) {
+class AuthRepository @Inject constructor(private val authService: AuthService) {
 
     suspend fun login(email: String): LoginResult {
         return when (val result = authService.login(email)) {

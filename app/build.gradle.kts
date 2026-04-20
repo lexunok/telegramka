@@ -1,7 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.0"
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.hilt.android.plugin)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -53,6 +55,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.coil.compose)
+
+    // Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     // Ktor
     implementation(libs.ktor.client.core)

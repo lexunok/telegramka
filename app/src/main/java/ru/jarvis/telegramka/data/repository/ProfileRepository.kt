@@ -4,7 +4,7 @@ import ru.jarvis.telegramka.data.User
 import ru.jarvis.telegramka.data.remote.api.ProfileService
 import ru.jarvis.telegramka.data.remote.model.UserDto
 
-class ProfileRepository(private val profileService: ProfileService) {
+class ProfileRepository @Inject constructor(private val profileService: ProfileService) {
 
     suspend fun getProfile(): Result<User> {
         return try {

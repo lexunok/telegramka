@@ -18,9 +18,10 @@ sealed class AuthResult<out T> {
     object NetworkError : AuthResult<Nothing>()
 }
 
-class AuthService {
-    private val client = KtorClient.httpClient
-    private val baseUrl = KtorClient.getBaseUrl()
+class AuthService @Inject constructor(
+    private val client: HttpClient
+) {
+    private val baseUrl = "http://10.0.2.2:3000/api"
 
     suspend fun login(email: String): AuthResult<Unit> {
         return try {

@@ -6,7 +6,7 @@ import ru.jarvis.telegramka.data.remote.model.ChatDto
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
-class ChatRepository(private val chatService: ChatService) {
+class ChatRepository @Inject constructor(private val chatService: ChatService) {
 
     suspend fun getChats(): Result<List<Chat>> {
         return try {
