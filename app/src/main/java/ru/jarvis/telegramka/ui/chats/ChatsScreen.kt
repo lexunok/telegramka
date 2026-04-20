@@ -1,42 +1,32 @@
 package ru.jarvis.telegramka.ui.chats
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Message
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.focusModifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -50,7 +40,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import ru.jarvis.telegramka.data.Chat
-import ru.jarvis.telegramka.data.MockData
+import ru.jarvis.telegramka.data.User
 import ru.jarvis.telegramka.navigation.Screen
 import ru.jarvis.telegramka.ui.login.GradientButton
 import ru.jarvis.telegramka.ui.theme.AppMotion
@@ -63,128 +53,61 @@ fun ChatsScreen(
     navController: NavController,
     viewModel: ChatsViewModel = viewModel()
 ) {
-    val chats by viewModel.chats.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     var showDialog by remember { mutableStateOf(false) }
-    val user = MockData.currentUser
 
-    val filteredChats = chats.filter {
-        it.name.contains(searchQuery, ignoreCase = true) ||
-                it.nickname.contains(searchQuery, ignoreCase = true)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = user.name.first().uppercase(),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "Telegramka",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "@${user.name}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+    AnimatedContent(
+        targetState = uiState,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(AppMotion.ContentDuration))) togetherWith (fadeOut(animationSpec = tween(AppMotion.ExitDuration)))
+        }, label = "MainContent"
+    ) { state ->
+        when (state) {
+            is ChatsUiState.Loading -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
-                Row {
-                    IconButton(
-                        onClick = { showDialog = true },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Contact")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = {
+            }
+            is ChatsUiState.Error -> {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(text = state.message, color = MaterialTheme.colorScheme.error)
+                }
+            }
+            is ChatsUiState.Success -> {
+                val filteredChats = state.chats.filter {
+                    it.name.contains(searchQuery, ignoreCase = true) ||
+                            it.nickname.contains(searchQuery, ignoreCase = true)
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    TopBar(
+                        user = state.currentUser,
+                        onAddContact = { showDialog = true },
+                        onLogout = {
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.Chats.route) { inclusive = true }
                             }
-                        },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout")
-                    }
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        TextField(
-            value = searchQuery,
-            onValueChange = { viewModel.onSearchQueryChanged(it) },
-            placeholder = { Text("Поиск чатов...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            )
-        )
-        AnimatedContent(
-            targetState = filteredChats.isEmpty(),
-            transitionSpec = {
-                (
-                    fadeIn(animationSpec = tween(AppMotion.ContentDuration)) +
-                        slideInVertically(
-                            animationSpec = tween(AppMotion.ContentDuration),
-                            initialOffsetY = { it / 16 }
-                        )
-                    ) togetherWith (
-                    fadeOut(animationSpec = tween(AppMotion.ExitDuration)) +
-                        slideOutVertically(
-                            animationSpec = tween(AppMotion.ExitDuration),
-                            targetOffsetY = { -(it / 24) }
-                        )
+                        }
                     )
-            }
-        ) { isEmpty ->
-            if (isEmpty) {
-                EmptyChatsView(onAddContact = { showDialog = true })
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(filteredChats, key = { it.id }) { chat ->
-                        ChatListItem(chat = chat) {
-                            navController.navigate(Screen.Chat.createRoute(chat.id))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SearchBar(
+                        query = searchQuery,
+                        onQueryChanged = { viewModel.onSearchQueryChanged(it) }
+                    )
+
+                    if (filteredChats.isEmpty()) {
+                        EmptyChatsView(onAddContact = { showDialog = true })
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            items(filteredChats, key = { it.id }) { chat ->
+                                ChatListItem(chat = chat) {
+                                    navController.navigate(Screen.Chat.createRoute(chat.id))
+                                }
+                            }
                         }
                     }
                 }
@@ -196,13 +119,100 @@ fun ChatsScreen(
         AddContactDialog(
             onDismiss = { showDialog = false },
             onConfirm = { nickname ->
-                if (viewModel.onAddChat(nickname)) {
-                    showDialog = false
-                }
+                // TODO: Implement Add Contact logic in ViewModel
+                showDialog = false
             }
         )
     }
 }
+
+@Composable
+fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit) {
+    Column(modifier = Modifier.padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = user.name.first().uppercase(),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Telegramka",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "@${user.nickname}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Row {
+                IconButton(
+                    onClick = onAddContact,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Contact")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    onClick = onLogout,
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f),
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchBar(query: String, onQueryChanged: (String) -> Unit) {
+    TextField(
+        value = query,
+        onValueChange = onQueryChanged,
+        placeholder = { Text("Поиск чатов...") },
+        leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Icon", tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+        )
+    )
+}
+
 
 @Composable
 fun EmptyChatsView(onAddContact: () -> Unit) {
@@ -352,30 +362,18 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
 @Composable
 fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var nickname by remember { mutableStateOf("") }
-    var scrimVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        scrimVisible = true
-    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(onClick = onDismiss),
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
             contentAlignment = Alignment.Center
         ) {
-            AnimatedVisibility(
-                visible = scrimVisible,
-                enter = fadeIn(animationSpec = tween(durationMillis = 220))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(Color.Black.copy(alpha = 0.6f))
-                )
-            }
-
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -423,15 +421,6 @@ fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun AddContactDialogPreview() {
-    TelegramkaTheme {
-        AddContactDialog(onDismiss = {}, onConfirm = {})
-    }
-}
-
-
 private fun formatTime(timestamp: Long): String {
     val date = Date(timestamp)
     val today = Calendar.getInstance()
@@ -452,21 +441,5 @@ private fun formatTime(timestamp: Long): String {
 fun ChatsScreenPreview() {
     TelegramkaTheme {
         ChatsScreen(navController = rememberNavController())
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun EmptyChatsScreenPreview() {
-    TelegramkaTheme {
-       EmptyChatsView(onAddContact = {})
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun ChatListItemPreview() {
-    TelegramkaTheme {
-        ChatListItem(chat = MockData.chats.first(), onClick = {})
     }
 }

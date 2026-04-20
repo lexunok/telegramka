@@ -15,7 +15,7 @@ import ru.jarvis.telegramka.data.repository.RefreshResult
 import ru.jarvis.telegramka.data.storage.TokenManager
 
 object KtorClient {
-    private const val BASE_URL = "http://10.0.2.2:8080/api" // Assuming default Ktor server port
+    private const val BASE_URL = "http://10.0.2.2:3000/api" // Assuming default Ktor server port
 
     // TODO: Use a proper DI framework for AuthRepository injection
     private val authService = ru.jarvis.telegramka.data.remote.api.AuthService()

@@ -1,37 +1,69 @@
 package ru.jarvis.telegramka.ui.chats
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import ru.jarvis.telegramka.data.Chat
-import ru.jarvis.telegramka.data.MockData
+import ru.jarvis.telegramka.data.User
+import ru.jarvis.telegramka.data.remote.api.ChatService
+import ru.jarvis.telegramka.data.remote.api.ProfileService
+import ru.jarvis.telegramka.data.repository.ChatRepository
+import ru.jarvis.telegramka.data.repository.ProfileRepository
+
+sealed interface ChatsUiState {
+    data class Success(val chats: List<Chat>, val currentUser: User) : ChatsUiState
+    data class Error(val message: String) : ChatsUiState
+    object Loading : ChatsUiState
+}
 
 class ChatsViewModel : ViewModel() {
-    private val _chats = MutableStateFlow(MockData.chats)
-    val chats = _chats.asStateFlow()
+    private val _uiState = MutableStateFlow<ChatsUiState>(ChatsUiState.Loading)
+    val uiState = _uiState.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
-    fun onSearchQueryChanged(query: String) {
-        _searchQuery.value = query
+    private val chatRepository: ChatRepository
+    private val profileRepository: ProfileRepository
+
+    init {
+        // This is not ideal, a proper DI framework should be used.
+        val chatService = ChatService()
+        chatRepository = ChatRepository(chatService)
+        val profileService = ProfileService()
+        profileRepository = ProfileRepository(profileService)
+        
+        loadData()
     }
 
-    fun onAddChat(nickname: String) : Boolean {
-        val userToAdd = MockData.allUsers.find { it.nickname.equals(nickname, ignoreCase = true) }
-        if (userToAdd != null) {
-            val chatExists = _chats.value.any { it.nickname.equals(nickname, ignoreCase = true) }
-            if (!chatExists) {
-                val newChat = Chat(
-                    id = userToAdd.id,
-                    name = userToAdd.name,
-                    nickname = userToAdd.nickname,
-                    avatarUrl = "https://i.pravatar.cc/150?u=${userToAdd.name}"
-                )
-                _chats.value = _chats.value + newChat
-                return true
+    private fun loadData() {
+        viewModelScope.launch {
+            _uiState.value = ChatsUiState.Loading
+            
+            val chatsDeferred = async { chatRepository.getChats() }
+            val profileDeferred = async { profileRepository.getProfile() }
+
+            val chatsResult = chatsDeferred.await()
+            val profileResult = profileDeferred.await()
+
+            val chats = chatsResult.getOrNull()
+            val profile = profileResult.getOrNull()
+
+            if (chats != null && profile != null) {
+                _uiState.value = ChatsUiState.Success(chats, profile)
+            } else {
+                val errorMessage = chatsResult.exceptionOrNull()?.message 
+                    ?: profileResult.exceptionOrNull()?.message 
+                    ?: "Unknown error"
+                _uiState.value = ChatsUiState.Error(errorMessage)
             }
         }
-        return false
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
     }
 }
