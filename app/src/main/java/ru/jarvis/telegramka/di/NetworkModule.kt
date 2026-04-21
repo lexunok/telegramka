@@ -10,6 +10,7 @@ import io.ktor.client.plugins.auth.*
 import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
+import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -17,6 +18,7 @@ import kotlinx.serialization.json.Json
 import ru.jarvis.telegramka.data.remote.api.AuthService
 import ru.jarvis.telegramka.data.remote.api.ChatService
 import ru.jarvis.telegramka.data.remote.api.ProfileService
+import ru.jarvis.telegramka.data.remote.api.UserService
 import ru.jarvis.telegramka.data.storage.TokenManager
 import javax.inject.Singleton
 
@@ -51,6 +53,12 @@ object NetworkModule {
     @Singleton
     fun provideAuthService(@UnauthenticatedClient client: HttpClient): AuthService {
         return AuthService(client)
+    }
+
+    @Provides
+    @Singleton
+    fun provideUserService(@UnauthenticatedClient client: HttpClient): UserService {
+        return UserService(client)
     }
 
     @Provides
@@ -94,6 +102,19 @@ object NetworkModule {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    @Provides
+    @Singleton
+    @WebSocketClient
+    fun provideWebSocketClient(): HttpClient {
+        return HttpClient(CIO) {
+            install(WebSockets)
+            install(Logging) {
+                logger = Logger.DEFAULT
+                level = LogLevel.ALL
             }
         }
     }

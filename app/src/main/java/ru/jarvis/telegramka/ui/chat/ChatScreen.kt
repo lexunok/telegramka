@@ -38,20 +38,34 @@ import java.util.*
 @Composable
 fun ChatScreen(
     navController: NavController,
-    chatId: String,
+    id: String,
+    name: String,
+    nickname: String,
+    currentUserId: String,
     viewModel: ChatViewModel = viewModel()
 ) {
     val messages by viewModel.messages.collectAsState()
-    val chat by viewModel.chat.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(chatId) {
-        viewModel.loadChat(chatId)
+    LaunchedEffect(id, currentUserId) {
+        viewModel.initialize(id, currentUserId)
     }
 
     LaunchedEffect(messages.size) {
-        listState.animateScrollToItem(0)
+        // Scroll to the latest message. Assuming messages are ordered from oldest to newest.
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeErrorMessage()
+        }
     }
 
     Column(
@@ -71,8 +85,8 @@ fun ChatScreen(
             )
     ) {
         ChatHeader(
-            name = chat?.name ?: "",
-            nickname = chat?.nickname ?: "",
+            name = name,
+            nickname = nickname,
             onBack = { navController.popBackStack() }
         )
 
@@ -81,21 +95,21 @@ fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 16.dp),
-            reverseLayout = true
+            // reverseLayout = true // Removing this as messages are expected to be ordered oldest to newest now
         ) {
             if (messages.isEmpty()) {
                 item {
                     EmptyChatPlaceholder()
                 }
             } else {
-                itemsIndexed(messages.reversed()) { index, message ->
-                    val prevMessage = messages.reversed().getOrNull(index + 1)
+                itemsIndexed(messages) { index, message ->
+                    val prevMessage = messages.getOrNull(index - 1) // Check previous message
                     val showDate = prevMessage == null || !isSameDay(prevMessage.timestamp, message.timestamp)
 
                     if (showDate) {
                         DateSeparator(timestamp = message.timestamp)
                     }
-                    MessageItem(message = message)
+                    MessageItem(message = message, currentUserId = currentUserId)
                 }
             }
         }
@@ -111,6 +125,7 @@ fun ChatScreen(
                 }
             }
         )
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.imePadding())
     }
 }
 
@@ -158,8 +173,8 @@ fun ChatHeader(name: String, nickname: String, onBack: () -> Unit) {
 }
 
 @Composable
-fun MessageItem(message: Message) {
-    val isCurrentUser = message.senderId == MockData.currentUser.id
+fun MessageItem(message: Message, currentUserId: String) {
+    val isCurrentUser = message.senderId == currentUserId
     val horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
     val bubbleShape = if (isCurrentUser) {
         RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
@@ -341,6 +356,6 @@ private fun isSameDay(timestamp1: Long, timestamp2: Long): Boolean {
 @Composable
 fun ChatScreenPreview() {
     TelegramkaTheme {
-        ChatScreen(navController = rememberNavController(), chatId = "1")
+        ChatScreen(navController = rememberNavController(), id = "1", name = "Test User", nickname = "testuser", currentUserId = "myUserId")
     }
 }

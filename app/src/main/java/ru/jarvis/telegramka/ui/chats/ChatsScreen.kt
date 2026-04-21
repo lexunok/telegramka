@@ -55,7 +55,33 @@ fun ChatsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val isSearchingUser by viewModel.isSearchingUser.collectAsState()
+    val searchUserError by viewModel.searchUserError.collectAsState()
+    val navigationEvent by viewModel.navigationEvent.collectAsState()
+
     var showDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(navigationEvent) {
+        navigationEvent?.let { event ->
+            val uiStateValue = viewModel.uiState.value
+            if (uiStateValue is ChatsUiState.Success) {
+                when (event) {
+                    is ChatsNavigationEvent.NavigateToChat -> {
+                        showDialog = false
+                        navController.navigate(
+                            Screen.Chat.createRoute(
+                                id = event.id,
+                                name = event.name,
+                                nickname = event.nickname,
+                                currentUserId = uiStateValue.currentUser.id
+                            )
+                        )
+                    }
+                }
+                viewModel.consumeNavigationEvent()
+            }
+        }
+    }
 
     AnimatedContent(
         targetState = uiState,
@@ -88,6 +114,7 @@ fun ChatsScreen(
                         user = state.currentUser,
                         onAddContact = { showDialog = true },
                         onLogout = {
+                            viewModel.onLogout()
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.Chats.route) { inclusive = true }
                             }
@@ -105,7 +132,7 @@ fun ChatsScreen(
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
                             items(filteredChats, key = { it.id }) { chat ->
                                 ChatListItem(chat = chat) {
-                                    navController.navigate(Screen.Chat.createRoute(chat.id))
+                                    navController.navigate(Screen.Chat.createRoute(chat.id, chat.name, chat.nickname, state.currentUser.id))
                                 }
                             }
                         }
@@ -117,10 +144,14 @@ fun ChatsScreen(
 
     if (showDialog) {
         AddContactDialog(
-            onDismiss = { showDialog = false },
-            onConfirm = { nickname ->
-                // TODO: Implement Add Contact logic in ViewModel
+            isSearching = isSearchingUser,
+            error = searchUserError,
+            onDismiss = {
+                viewModel.clearSearchError()
                 showDialog = false
+            },
+            onConfirm = { nickname ->
+                viewModel.findUser(nickname)
             }
         )
     }
@@ -360,7 +391,12 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
 }
 
 @Composable
-fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+fun AddContactDialog(
+    isSearching: Boolean,
+    error: String?,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
     var nickname by remember { mutableStateOf("") }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -400,6 +436,12 @@ fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("Введите @nickname") },
                         label = { Text("Никнейм") },
+                        isError = error != null,
+                        supportingText = {
+                            if (error != null) {
+                                Text(error, color = MaterialTheme.colorScheme.error)
+                            }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -411,9 +453,17 @@ fun AddContactDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
                     GradientButton(
                         onClick = { onConfirm(nickname) },
-                        enabled = nickname.isNotBlank()
+                        enabled = nickname.isNotBlank() && !isSearching
                     ) {
-                        Text("Добавить")
+                        if (isSearching) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("Добавить")
+                        }
                     }
                 }
             }

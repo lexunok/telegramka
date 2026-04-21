@@ -1,5 +1,6 @@
 package ru.jarvis.telegramka.data.repository
 
+import jakarta.inject.Inject
 import ru.jarvis.telegramka.data.User
 import ru.jarvis.telegramka.data.remote.api.ProfileService
 import ru.jarvis.telegramka.data.remote.model.UserDto

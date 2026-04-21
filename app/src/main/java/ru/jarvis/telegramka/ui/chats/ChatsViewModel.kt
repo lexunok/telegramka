@@ -9,8 +9,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.jarvis.telegramka.data.Chat
 import ru.jarvis.telegramka.data.User
+import ru.jarvis.telegramka.data.remote.RealtimeChatManager
+import ru.jarvis.telegramka.data.remote.model.UserDto
 import ru.jarvis.telegramka.data.repository.ChatRepository
 import ru.jarvis.telegramka.data.repository.ProfileRepository
+import ru.jarvis.telegramka.data.repository.UserRepository
 import javax.inject.Inject
 
 sealed interface ChatsUiState {
@@ -19,10 +22,16 @@ sealed interface ChatsUiState {
     object Loading : ChatsUiState
 }
 
+sealed interface ChatsNavigationEvent {
+    data class NavigateToChat(val id: String, val name: String, val nickname: String) : ChatsNavigationEvent
+}
+
 @HiltViewModel
 class ChatsViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val userRepository: UserRepository,
+    private val realtimeChatManager: RealtimeChatManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<ChatsUiState>(ChatsUiState.Loading)
     val uiState = _uiState.asStateFlow()
@@ -30,35 +39,93 @@ class ChatsViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
+    private val _isSearchingUser = MutableStateFlow(false)
+    val isSearchingUser = _isSearchingUser.asStateFlow()
+
+    private val _searchUserError = MutableStateFlow<String?>(null)
+    val searchUserError = _searchUserError.asStateFlow()
+
+    private val _navigationEvent = MutableStateFlow<ChatsNavigationEvent?>(null)
+    val navigationEvent = _navigationEvent.asStateFlow()
+
     init {
         loadData()
+        realtimeChatManager.connect()
+        viewModelScope.launch {
+            realtimeChatManager.incomingMessages.collect { message ->
+                val currentState = _uiState.value
+                if (currentState is ChatsUiState.Success) {
+                    val updatedChats = currentState.chats.map { chat ->
+                        if (chat.id == message.chatId) {
+                            chat.copy(lastMessage = message.text, lastMessageTime = message.timestamp)
+                        } else {
+                            chat
+                        }
+                    }.sortedByDescending { it.lastMessageTime }
+                    _uiState.value = currentState.copy(chats = updatedChats)
+                }
+            }
+        }
     }
 
     private fun loadData() {
         viewModelScope.launch {
             _uiState.value = ChatsUiState.Loading
-            
+
             val chatsDeferred = async { chatRepository.getChats() }
             val profileDeferred = async { profileRepository.getProfile() }
 
             val chatsResult = chatsDeferred.await()
             val profileResult = profileDeferred.await()
 
-            val chats = chatsResult.getOrNull()
+            val chats = chatsResult.getOrNull()?.sortedByDescending { it.lastMessageTime }
             val profile = profileResult.getOrNull()
 
             if (chats != null && profile != null) {
                 _uiState.value = ChatsUiState.Success(chats, profile)
             } else {
-                val errorMessage = chatsResult.exceptionOrNull()?.message 
-                    ?: profileResult.exceptionOrNull()?.message 
+                val errorMessage = chatsResult.exceptionOrNull()?.message
+                    ?: profileResult.exceptionOrNull()?.message
                     ?: "Unknown error"
                 _uiState.value = ChatsUiState.Error(errorMessage)
             }
         }
     }
 
+    fun onLogout() {
+        realtimeChatManager.disconnect()
+        // Here you would also clear tokens, etc.
+    }
+
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
+    }
+
+    fun findUser(nickname: String) {
+        viewModelScope.launch {
+            _isSearchingUser.value = true
+            _searchUserError.value = null
+            val cleanedNickname = nickname.removePrefix("@")
+
+            val result = userRepository.findUserByNickname(cleanedNickname)
+
+            result.fold(
+                onSuccess = { foundUser ->
+                    _navigationEvent.value = ChatsNavigationEvent.NavigateToChat(foundUser.id, foundUser.name, foundUser.nickname)
+                },
+                onFailure = {
+                    _searchUserError.value = "Пользователь не найден"
+                }
+            )
+            _isSearchingUser.value = false
+        }
+    }
+
+    fun consumeNavigationEvent() {
+        _navigationEvent.value = null
+    }
+
+    fun clearSearchError() {
+        _searchUserError.value = null
     }
 }

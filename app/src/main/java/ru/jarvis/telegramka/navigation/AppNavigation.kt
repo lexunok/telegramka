@@ -84,7 +84,12 @@ fun AppNavigation() {
         }
         composable(
             route = Screen.Chat.route,
-            arguments = listOf(navArgument("chatId") { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument("id") { type = NavType.StringType },
+                navArgument("name") { type = NavType.StringType; nullable = true },
+                navArgument("nickname") { type = NavType.StringType; nullable = true },
+                navArgument("currentUserId") { type = NavType.StringType; nullable = true }
+            ),
             enterTransition = {
                 slideIntoContainer(
                     towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -103,8 +108,12 @@ fun AppNavigation() {
                 )
             }
         ) { backStackEntry ->
-            backStackEntry.arguments?.getString("chatId")?.let { chatId ->
-                ChatScreen(navController, chatId)
+            val id = backStackEntry.arguments?.getString("id")
+            val name = backStackEntry.arguments?.getString("name")
+            val nickname = backStackEntry.arguments?.getString("nickname")
+            val currentUserId = backStackEntry.arguments?.getString("currentUserId")
+            if (id != null && name != null && nickname != null && currentUserId != null) {
+                ChatScreen(navController, id, name, nickname, currentUserId)
             }
         }
     }

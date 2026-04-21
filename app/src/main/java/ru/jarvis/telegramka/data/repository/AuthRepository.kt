@@ -1,6 +1,7 @@
 package ru.jarvis.telegramka.data.repository
 
 import io.ktor.client.plugins.auth.providers.BearerTokens
+import jakarta.inject.Inject
 import ru.jarvis.telegramka.data.remote.api.AuthResult
 import ru.jarvis.telegramka.data.remote.api.AuthService
 import ru.jarvis.telegramka.data.remote.model.UserDto

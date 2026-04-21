@@ -1,10 +1,11 @@
 package ru.jarvis.telegramka.data.remote.api
 
+import io.ktor.client.HttpClient
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import ru.jarvis.telegramka.data.remote.KtorClient
+import jakarta.inject.Inject
 import ru.jarvis.telegramka.data.remote.model.ErrorResponse
 import ru.jarvis.telegramka.data.remote.model.LoginRequest
 import ru.jarvis.telegramka.data.remote.model.AuthResponse

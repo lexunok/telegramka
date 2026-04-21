@@ -2,19 +2,19 @@ package ru.jarvis.telegramka.ui.verify
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import ru.jarvis.telegramka.data.remote.api.AuthService
 import ru.jarvis.telegramka.data.repository.AuthRepository
 import ru.jarvis.telegramka.data.repository.VerifyCodeResult
+import javax.inject.Inject
 
-class VerifyCodeViewModel : ViewModel() {
-
-    // TODO: Use a proper DI framework for AuthRepository injection
-    private val authService = AuthService()
-    private val authRepository = AuthRepository(authService)
+@HiltViewModel
+class VerifyCodeViewModel @Inject constructor(
+    private val authRepository: AuthRepository
+): ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
