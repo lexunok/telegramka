@@ -7,13 +7,14 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import ru.jarvis.telegramka.data.Chat
-import ru.jarvis.telegramka.data.User
+import ru.jarvis.telegramka.domain.model.Chat
+import ru.jarvis.telegramka.domain.model.User
 import ru.jarvis.telegramka.data.remote.RealtimeChatManager
 import ru.jarvis.telegramka.data.remote.model.UserDto
 import ru.jarvis.telegramka.data.repository.ChatRepository
 import ru.jarvis.telegramka.data.repository.ProfileRepository
 import ru.jarvis.telegramka.data.repository.UserRepository
+import timber.log.Timber
 import javax.inject.Inject
 
 sealed interface ChatsUiState {
@@ -53,16 +54,20 @@ class ChatsViewModel @Inject constructor(
         realtimeChatManager.connect()
         viewModelScope.launch {
             realtimeChatManager.incomingMessages.collect { message ->
-                val currentState = _uiState.value
-                if (currentState is ChatsUiState.Success) {
-                    val updatedChats = currentState.chats.map { chat ->
-                        if (chat.id == message.chatId) {
-                            chat.copy(lastMessage = message.text, lastMessageTime = message.timestamp)
-                        } else {
-                            chat
-                        }
-                    }.sortedByDescending { it.lastMessageTime }
-                    _uiState.value = currentState.copy(chats = updatedChats)
+                try {
+                    val currentState = _uiState.value
+                    if (currentState is ChatsUiState.Success) {
+                        val updatedChats = currentState.chats.map { chat ->
+                            if (chat.id == message.chatId) {
+                                chat.copy(lastMessage = message.text, lastMessageTime = message.timestamp)
+                            } else {
+                                chat
+                            }
+                        }.sortedByDescending { it.lastMessageTime }
+                        _uiState.value = currentState.copy(chats = updatedChats)
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to process incoming message")
                 }
             }
         }
@@ -71,23 +76,27 @@ class ChatsViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             _uiState.value = ChatsUiState.Loading
+            try {
+                val chatsDeferred = async { chatRepository.getChats() }
+                val profileDeferred = async { profileRepository.getProfile() }
 
-            val chatsDeferred = async { chatRepository.getChats() }
-            val profileDeferred = async { profileRepository.getProfile() }
+                val chatsResult = chatsDeferred.await()
+                val profileResult = profileDeferred.await()
 
-            val chatsResult = chatsDeferred.await()
-            val profileResult = profileDeferred.await()
+                val chats = chatsResult.getOrNull()?.sortedByDescending { it.lastMessageTime }
+                val profile = profileResult.getOrNull()
 
-            val chats = chatsResult.getOrNull()?.sortedByDescending { it.lastMessageTime }
-            val profile = profileResult.getOrNull()
-
-            if (chats != null && profile != null) {
-                _uiState.value = ChatsUiState.Success(chats, profile)
-            } else {
-                val errorMessage = chatsResult.exceptionOrNull()?.message
-                    ?: profileResult.exceptionOrNull()?.message
-                    ?: "Unknown error"
-                _uiState.value = ChatsUiState.Error(errorMessage)
+                if (chats != null && profile != null) {
+                    _uiState.value = ChatsUiState.Success(chats, profile)
+                } else {
+                    val errorMessage = chatsResult.exceptionOrNull()?.message
+                        ?: profileResult.exceptionOrNull()?.message
+                        ?: "Unknown error"
+                    _uiState.value = ChatsUiState.Error(errorMessage)
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load data")
+                _uiState.value = ChatsUiState.Error(e.message ?: "An unexpected error occurred")
             }
         }
     }
@@ -105,19 +114,26 @@ class ChatsViewModel @Inject constructor(
         viewModelScope.launch {
             _isSearchingUser.value = true
             _searchUserError.value = null
-            val cleanedNickname = nickname.removePrefix("@")
+            try {
+                val cleanedNickname = nickname.removePrefix("@")
+                val result = userRepository.findUserByNickname(cleanedNickname)
 
-            val result = userRepository.findUserByNickname(cleanedNickname)
-
-            result.fold(
-                onSuccess = { foundUser ->
-                    _navigationEvent.value = ChatsNavigationEvent.NavigateToChat(foundUser.id, foundUser.name, foundUser.nickname)
-                },
-                onFailure = {
-                    _searchUserError.value = "Пользователь не найден"
-                }
-            )
-            _isSearchingUser.value = false
+                result.fold(
+                    onSuccess = { foundUser ->
+                        _navigationEvent.value = ChatsNavigationEvent.NavigateToChat(foundUser.id, foundUser.name, foundUser.nickname)
+                    },
+                    onFailure = {
+                        Timber.w(it, "User not found for nickname: %s", cleanedNickname)
+                        // TODO: Use string resources
+                        _searchUserError.value = "Пользователь не найден"
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to find user")
+                _searchUserError.value = e.message ?: "An unexpected error occurred"
+            } finally {
+                _isSearchingUser.value = false
+            }
         }
     }
 

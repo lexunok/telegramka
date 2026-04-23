@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.jarvis.telegramka.data.repository.AuthRepository
 import ru.jarvis.telegramka.data.repository.VerifyCodeResult
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -29,18 +30,26 @@ class VerifyCodeViewModel @Inject constructor(
         _isLoading.value = true
         _errorMessage.value = null // Clear previous errors
         viewModelScope.launch {
-            when (val result = authRepository.verifyCode(email, code)) {
-                is VerifyCodeResult.Success -> {
-                    _navigationEvent.value = VerifyCodeNavigationEvent.NavigateToChats
+            try {
+                when (val result = authRepository.verifyCode(email, code)) {
+                    is VerifyCodeResult.Success -> {
+                        _navigationEvent.value = VerifyCodeNavigationEvent.NavigateToChats
+                    }
+                    is VerifyCodeResult.Error -> {
+                        _errorMessage.value = result.message
+                    }
+                    is VerifyCodeResult.NetworkError -> {
+                        // TODO: Use string resources
+                        _errorMessage.value = "Ошибка сети. Проверьте подключение к интернету."
+                    }
                 }
-                is VerifyCodeResult.Error -> {
-                    _errorMessage.value = result.message
-                }
-                is VerifyCodeResult.NetworkError -> {
-                    _errorMessage.value = "Ошибка сети. Проверьте подключение к интернету."
-                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to verify code")
+                // TODO: Use string resources
+                _errorMessage.value = "Произошла непредвиденная ошибка"
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
         }
     }
 

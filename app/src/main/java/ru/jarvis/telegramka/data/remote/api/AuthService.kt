@@ -5,12 +5,14 @@ import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import jakarta.inject.Inject
+import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.data.remote.model.ErrorResponse
 import ru.jarvis.telegramka.data.remote.model.LoginRequest
 import ru.jarvis.telegramka.data.remote.model.AuthResponse
 import ru.jarvis.telegramka.data.remote.model.RegisterRequest
 import ru.jarvis.telegramka.data.remote.model.VerifyCodeRequest
+import timber.log.Timber
+import javax.inject.Inject
 
 sealed class AuthResult<out T> {
     data class Success<out T>(val data: T) : AuthResult<T>()
@@ -22,7 +24,7 @@ sealed class AuthResult<out T> {
 class AuthService @Inject constructor(
     private val client: HttpClient
 ) {
-    private val baseUrl = "http://10.0.2.2:3000/api"
+    private val baseUrl = BuildConfig.API_BASE_URL
 
     suspend fun login(email: String): AuthResult<Unit> {
         return try {
@@ -40,7 +42,7 @@ class AuthService @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to login")
             AuthResult.NetworkError
         }
     }
@@ -60,7 +62,7 @@ class AuthService @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to register")
             AuthResult.NetworkError
         }
     }
@@ -80,7 +82,7 @@ class AuthService @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to verify code")
             AuthResult.NetworkError
         }
     }
@@ -100,7 +102,7 @@ class AuthService @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to refresh token")
             AuthResult.NetworkError
         }
     }

@@ -30,7 +30,6 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,7 +44,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import ru.jarvis.telegramka.navigation.Screen
@@ -58,7 +58,7 @@ import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
 fun VerifyCodeScreen(
     navController: NavController,
     email: String,
-    viewModel: VerifyCodeViewModel = viewModel()
+    viewModel: VerifyCodeViewModel = hiltViewModel()
 ) {
     var code by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
@@ -66,9 +66,9 @@ fun VerifyCodeScreen(
         derivedStateOf { viewModel.isCodeValid(code) }
     }
 
-    val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val navigationEvent by viewModel.navigationEvent.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val navigationEvent by viewModel.navigationEvent.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -79,8 +79,7 @@ fun VerifyCodeScreen(
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
-            // Optionally, clear the error message in ViewModel after showing
-            // viewModel.clearErrorMessage() // if such a method exists
+
         }
     }
 

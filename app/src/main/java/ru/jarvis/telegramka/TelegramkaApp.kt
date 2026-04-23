@@ -2,8 +2,15 @@ package ru.jarvis.telegramka
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
-import ru.jarvis.telegramka.data.storage.TokenManager
+import timber.log.Timber
 
 @HiltAndroidApp
-class TelegramkaApp : Application() 
+class TelegramkaApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
 
+    }
+}

@@ -36,11 +36,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import ru.jarvis.telegramka.data.Chat
-import ru.jarvis.telegramka.data.User
+import ru.jarvis.telegramka.domain.model.Chat
+import ru.jarvis.telegramka.domain.model.User
 import ru.jarvis.telegramka.navigation.Screen
 import ru.jarvis.telegramka.ui.login.GradientButton
 import ru.jarvis.telegramka.ui.theme.AppMotion
@@ -51,13 +52,13 @@ import java.util.*
 @Composable
 fun ChatsScreen(
     navController: NavController,
-    viewModel: ChatsViewModel = viewModel()
+    viewModel: ChatsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val isSearchingUser by viewModel.isSearchingUser.collectAsState()
-    val searchUserError by viewModel.searchUserError.collectAsState()
-    val navigationEvent by viewModel.navigationEvent.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val isSearchingUser by viewModel.isSearchingUser.collectAsStateWithLifecycle()
+    val searchUserError by viewModel.searchUserError.collectAsStateWithLifecycle()
+    val navigationEvent by viewModel.navigationEvent.collectAsStateWithLifecycle()
 
     var showDialog by remember { mutableStateOf(false) }
 

@@ -26,11 +26,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import ru.jarvis.telegramka.data.Message
-import ru.jarvis.telegramka.data.MockData
+import ru.jarvis.telegramka.domain.model.Message
 import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
 import java.text.SimpleDateFormat
 import java.util.*
@@ -42,10 +42,10 @@ fun ChatScreen(
     name: String,
     nickname: String,
     currentUserId: String,
-    viewModel: ChatViewModel = viewModel()
+    viewModel: ChatViewModel = hiltViewModel()
 ) {
-    val messages by viewModel.messages.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -95,7 +95,7 @@ fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .padding(horizontal = 16.dp),
-            // reverseLayout = true // Removing this as messages are expected to be ordered oldest to newest now
+
         ) {
             if (messages.isEmpty()) {
                 item {
@@ -225,10 +225,10 @@ fun MessageItem(message: Message, currentUserId: String) {
 
 @Composable
 fun MessageInput(value: String, onValueChange: (String) -> Unit, onSend: () -> Unit) {
-//    Surface(
-//        color = MaterialTheme.colorScheme.surface,
-//        shadowElevation = 8.dp
-//    ) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 8.dp
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -277,7 +277,7 @@ fun MessageInput(value: String, onValueChange: (String) -> Unit, onSend: () -> U
             }
 
         }
-//    }
+    }
 }
 
 @Composable

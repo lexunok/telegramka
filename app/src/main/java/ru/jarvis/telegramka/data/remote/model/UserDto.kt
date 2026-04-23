@@ -8,6 +8,6 @@ data class UserDto(
     val name: String,
     val email: String,
     val nickname: String,
-    val avatar_url: String?,
-    val created_at: String
+    val avatarUrl: String?,
+    val createdAt: String
 )

@@ -13,8 +13,8 @@ import io.ktor.client.plugins.logging.*
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNamingStrategy
 import ru.jarvis.telegramka.data.remote.api.AuthService
 import ru.jarvis.telegramka.data.remote.api.ChatService
 import ru.jarvis.telegramka.data.remote.api.ProfileService
@@ -32,6 +32,7 @@ object NetworkModule {
         prettyPrint = true
         isLenient = true
         ignoreUnknownKeys = true
+        namingStrategy = JsonNamingStrategy.SnakeCase
     }
 
     @Provides
@@ -66,7 +67,8 @@ object NetworkModule {
     @AuthenticatedClient
     fun provideAuthenticatedHttpClient(
         json: Json,
-        authService: AuthService
+        authService: AuthService,
+        tokenManager: TokenManager
     ): HttpClient {
         return HttpClient(CIO) {
             install(ContentNegotiation) {
@@ -79,8 +81,8 @@ object NetworkModule {
             install(Auth) {
                 bearer {
                     loadTokens {
-                        val accessToken = runBlocking { TokenManager.getAccessToken().first() }
-                        val refreshToken = runBlocking { TokenManager.getRefreshToken().first() }
+                        val accessToken = tokenManager.getAccessToken().first()
+                        val refreshToken = tokenManager.getRefreshToken().first()
                         if (accessToken != null && refreshToken != null) {
                             BearerTokens(accessToken, refreshToken)
                         } else {
@@ -88,12 +90,12 @@ object NetworkModule {
                         }
                     }
                     refreshTokens {
-                        val oldRefreshToken = runBlocking { TokenManager.getRefreshToken().first() }
+                        val oldRefreshToken = tokenManager.getRefreshToken().first()
                         if (oldRefreshToken != null) {
-                            val result = runBlocking { authService.refreshToken(oldRefreshToken) }
+                            val result = authService.refreshToken(oldRefreshToken)
                             if (result is ru.jarvis.telegramka.data.remote.api.AuthResult.Success) {
-                                TokenManager.saveTokens(result.data.access_token, result.data.refresh_token)
-                                BearerTokens(result.data.access_token, result.data.refresh_token)
+                                tokenManager.saveTokens(result.data.accessToken, result.data.refreshToken)
+                                BearerTokens(result.data.accessToken, result.data.refreshToken)
                             } else {
                                 null
                             }
@@ -108,15 +110,15 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    @WebSocketClient
-    fun provideWebSocketClient(): HttpClient {
-        return HttpClient(CIO) {
+    fun provideWebSocketClient(): WebSocketHolder {
+        val client = HttpClient(CIO) {
             install(WebSockets)
             install(Logging) {
                 logger = Logger.DEFAULT
                 level = LogLevel.ALL
             }
         }
+        return WebSocketHolder(client)
     }
 
     @Provides

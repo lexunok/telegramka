@@ -31,6 +31,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // buildConfigField "String", "WS_HOST", "\"your_production_host\""
+            // buildConfigField "int", "WS_PORT", "your_production_port"
+        }
+        getByName("debug") {
+            // Host for Android Emulator to connect to the host machine's localhost
+            buildConfigField("String", "WS_HOST", "\"10.0.2.2\"")
+            buildConfigField("int", "WS_PORT", "3000")
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api\"")
         }
     }
     compileOptions {
@@ -39,12 +47,20 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -55,6 +71,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.coil.compose)
+    implementation(libs.timber)
+    implementation(libs.androidx.hilt.navigation.compose)
 
     // Hilt
     implementation(libs.hilt.android)

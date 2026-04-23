@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class MessageDto(
     val id: String,
-    val chat_id: String,
-    val sender_id: String,
+    val chatId: String,
+    val senderId: String,
     val text: String,
-    val created_at: String
+    val createdAt: String
 )

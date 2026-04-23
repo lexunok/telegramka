@@ -20,7 +20,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.flow.collectLatest
@@ -32,7 +33,7 @@ import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
 @Composable
 fun LoginScreen(
     navController: NavController,
-    viewModel: LoginViewModel = viewModel()
+    viewModel: LoginViewModel = hiltViewModel()
 ) {
     var email by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
@@ -40,9 +41,9 @@ fun LoginScreen(
         derivedStateOf { viewModel.isEmailValid(email) }
     }
 
-    val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val navigationEvent by viewModel.navigationEvent.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val navigationEvent by viewModel.navigationEvent.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -53,8 +54,7 @@ fun LoginScreen(
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
-            // Optionally, clear the error message in ViewModel after showing
-            // viewModel.clearErrorMessage() // if such a method exists
+
         }
     }
 

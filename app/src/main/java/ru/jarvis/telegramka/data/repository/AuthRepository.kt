@@ -1,11 +1,12 @@
 package ru.jarvis.telegramka.data.repository
 
 import io.ktor.client.plugins.auth.providers.BearerTokens
-import jakarta.inject.Inject
+import ru.jarvis.telegramka.data.mapper.toDomain
 import ru.jarvis.telegramka.data.remote.api.AuthResult
 import ru.jarvis.telegramka.data.remote.api.AuthService
-import ru.jarvis.telegramka.data.remote.model.UserDto
 import ru.jarvis.telegramka.data.storage.TokenManager
+import ru.jarvis.telegramka.domain.model.User
+import javax.inject.Inject
 
 sealed class LoginResult {
     object Success : LoginResult()
@@ -21,7 +22,7 @@ sealed class RegisterResult {
 }
 
 sealed class VerifyCodeResult {
-    data class Success(val user: UserDto) : VerifyCodeResult()
+    data class Success(val user: User) : VerifyCodeResult()
     data class Error(val message: String) : VerifyCodeResult()
     object NetworkError : VerifyCodeResult()
 }
@@ -32,7 +33,10 @@ sealed class RefreshResult {
     object NetworkError : RefreshResult()
 }
 
-class AuthRepository @Inject constructor(private val authService: AuthService) {
+class AuthRepository @Inject constructor(
+    private val authService: AuthService,
+    private val tokenManager: TokenManager
+) {
 
     suspend fun login(email: String): LoginResult {
         return when (val result = authService.login(email)) {
@@ -55,9 +59,9 @@ class AuthRepository @Inject constructor(private val authService: AuthService) {
     suspend fun verifyCode(email: String, code: String): VerifyCodeResult {
         return when (val result = authService.verifyCode(email, code)) {
             is AuthResult.Success -> {
-                result.data.user?.let { user ->
-                    TokenManager.saveTokens(result.data.access_token, result.data.refresh_token)
-                    VerifyCodeResult.Success(user)
+                result.data.user?.let { userDto ->
+                    tokenManager.saveTokens(result.data.accessToken, result.data.refreshToken)
+                    VerifyCodeResult.Success(userDto.toDomain())
                 } ?: VerifyCodeResult.Error("Пользовательские данные отсутствуют в ответе")
             }
             is AuthResult.Error -> VerifyCodeResult.Error(result.message)
@@ -69,9 +73,9 @@ class AuthRepository @Inject constructor(private val authService: AuthService) {
     suspend fun refreshToken(oldRefreshToken: String): RefreshResult {
         return when (val result = authService.refreshToken(oldRefreshToken)) {
             is AuthResult.Success -> {
-                val newAccessToken = result.data.access_token
-                val newRefreshToken = result.data.refresh_token
-                TokenManager.saveTokens(newAccessToken, newRefreshToken)
+                val newAccessToken = result.data.accessToken
+                val newRefreshToken = result.data.refreshToken
+                tokenManager.saveTokens(newAccessToken, newRefreshToken)
                 RefreshResult.Success(BearerTokens(newAccessToken, newRefreshToken))
             }
             is AuthResult.Error -> RefreshResult.Error(result.message)

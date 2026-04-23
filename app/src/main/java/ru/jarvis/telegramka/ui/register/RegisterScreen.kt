@@ -19,7 +19,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import ru.jarvis.telegramka.navigation.Screen
@@ -32,15 +33,15 @@ import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
 fun RegisterScreen(
     navController: NavController,
     email: String,
-    viewModel: RegisterViewModel = viewModel()
+    viewModel: RegisterViewModel = hiltViewModel()
 ) {
     var name by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
 
-    val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val navigationEvent by viewModel.navigationEvent.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val navigationEvent by viewModel.navigationEvent.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -51,8 +52,7 @@ fun RegisterScreen(
     LaunchedEffect(errorMessage) {
         errorMessage?.let { message ->
             snackbarHostState.showSnackbar(message)
-            // Optionally, clear the error message in ViewModel after showing
-            // viewModel.clearErrorMessage() // if such a method exists
+
         }
     }
 
@@ -127,7 +127,6 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(48.dp))
 
-                    // Name field
                     TextField(
                         value = name,
                         onValueChange = { name = it },
@@ -147,7 +146,6 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Nickname field
                     TextField(
                         value = nickname,
                         onValueChange = { nickname = it },
@@ -167,7 +165,6 @@ fun RegisterScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Email field
                     TextField(
                         value = email,
                         onValueChange = {},

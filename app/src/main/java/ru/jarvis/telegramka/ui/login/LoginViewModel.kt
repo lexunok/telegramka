@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.jarvis.telegramka.data.repository.AuthRepository
 import ru.jarvis.telegramka.data.repository.LoginResult
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -30,21 +31,29 @@ class LoginViewModel @Inject constructor(
         _isLoading.value = true
         _errorMessage.value = null // Clear previous errors
         viewModelScope.launch {
-            when (val result = authRepository.login(email)) {
-                is LoginResult.Success -> {
-                    _navigationEvent.value = LoginNavigationEvent.NavigateToVerifyCode(email)
+            try {
+                when (val result = authRepository.login(email)) {
+                    is LoginResult.Success -> {
+                        _navigationEvent.value = LoginNavigationEvent.NavigateToVerifyCode(email)
+                    }
+                    is LoginResult.UserNotFound -> {
+                        _navigationEvent.value = LoginNavigationEvent.NavigateToRegister(email)
+                    }
+                    is LoginResult.Error -> {
+                        _errorMessage.value = result.message
+                    }
+                    is LoginResult.NetworkError -> {
+                        // TODO: Use string resources
+                        _errorMessage.value = "Ошибка сети. Проверьте подключение к интернету."
+                    }
                 }
-                is LoginResult.UserNotFound -> {
-                    _navigationEvent.value = LoginNavigationEvent.NavigateToRegister(email)
-                }
-                is LoginResult.Error -> {
-                    _errorMessage.value = result.message
-                }
-                is LoginResult.NetworkError -> {
-                    _errorMessage.value = "Ошибка сети. Проверьте подключение к интернету."
-                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to login")
+                // TODO: Use string resources
+                _errorMessage.value = "Произошла непредвиденная ошибка"
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
         }
     }
 

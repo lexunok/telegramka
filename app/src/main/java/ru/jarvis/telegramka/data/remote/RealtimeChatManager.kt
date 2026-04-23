@@ -1,7 +1,5 @@
 package ru.jarvis.telegramka.data.remote
 
-import android.util.Log
-import io.ktor.client.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.header
 import io.ktor.http.*
@@ -9,6 +7,8 @@ import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -17,12 +17,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
-import ru.jarvis.telegramka.data.Message
+import ru.jarvis.telegramka.BuildConfig
+import ru.jarvis.telegramka.domain.model.Message
 import ru.jarvis.telegramka.data.remote.model.MessageDto
-import ru.jarvis.telegramka.data.repository.ChatRepository
 import ru.jarvis.telegramka.data.storage.TokenManager
-import ru.jarvis.telegramka.di.WebSocketClient
+import ru.jarvis.telegramka.di.WebSocketHolder
+import timber.log.Timber
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -30,61 +32,66 @@ import javax.inject.Singleton
 
 @Singleton
 class RealtimeChatManager @Inject constructor(
-    @WebSocketClient private val client: HttpClient,
+    webSocketHolder: WebSocketHolder,
     private val tokenManager: TokenManager,
     private val json: Json
 ) {
+    private val client = webSocketHolder.client
     private val _incomingMessages = MutableSharedFlow<Message>()
     val incomingMessages: SharedFlow<Message> = _incomingMessages.asSharedFlow()
 
-    private var session: DefaultClientWebSocketSession? = null
     private var connectionJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     fun connect() {
         if (connectionJob?.isActive == true) {
-            Log.d("RealtimeChatManager", "Already connected or connecting.")
+            Timber.d("Already connected or connecting.")
             return
         }
         connectionJob = scope.launch {
             while (isActive) {
+                var session: DefaultClientWebSocketSession? = null
                 try {
                     val token = tokenManager.getAccessToken().first()
                     if (token == null) {
-                        Log.e("RealtimeChatManager", "Not authenticated, cannot connect.")
+                        Timber.e("Not authenticated, cannot connect.")
                         delay(10000) // Wait before retrying
                         continue
                     }
 
-                    Log.d("RealtimeChatManager", "Attempting to connect...")
+                    Timber.d("Attempting to connect...")
                     client.webSocket(
                         method = HttpMethod.Get,
-                        host = "10.0.2.2",
-                        port = 3000,
+                        host = BuildConfig.WS_HOST,
+                        port = BuildConfig.WS_PORT,
                         path = "/ws",
                         request = {
                             header(HttpHeaders.Authorization, "Bearer $token")
                         }
                     ) {
                         session = this
-                        Log.d("RealtimeChatManager", "Connection established.")
+                        Timber.d("Connection established.")
                         for (frame in incoming) {
                             if (frame is Frame.Text) {
                                 val text = frame.readText()
-                                Log.d("RealtimeChatManager", "Received: $text")
-                                val messageDto = json.decodeFromString<MessageDto>(text)
-                                _incomingMessages.emit(messageDto.toMessage())
+                                Timber.d("Received: %s", text)
+                                try {
+                                    val messageDto = json.decodeFromString<MessageDto>(text)
+                                    _incomingMessages.emit(messageDto.toMessage())
+                                } catch (e: SerializationException) {
+                                    Timber.e(e, "Failed to decode message")
+                                }
                             }
                         }
                     }
                 } catch (e: ClosedReceiveChannelException) {
-                    Log.w("RealtimeChatManager", "Connection closed. Reconnecting...", e)
+                    Timber.w(e, "Connection closed. Reconnecting...")
                 } catch (e: Exception) {
-                    Log.e("RealtimeChatManager", "Connection failed. Retrying in 5 seconds.", e)
+                    Timber.e(e, "Connection failed. Retrying in 5 seconds.")
                     delay(5000)
                 } finally {
-                    session = null
-                    Log.d("RealtimeChatManager", "Session ended. Will attempt to reconnect if still active.")
+                    Timber.d("Closing session and cleaning up.")
+                    session?.close(CloseReason(CloseReason.Codes.NORMAL, "Ending session"))
                     if (isActive) delay(1000) // Brief delay before retry loop continues
                 }
             }
@@ -92,22 +99,23 @@ class RealtimeChatManager @Inject constructor(
     }
 
     fun disconnect() {
+        Timber.d("Disconnect requested.")
         connectionJob?.cancel()
         connectionJob = null
-        scope.launch {
-            session?.close(CloseReason(CloseReason.Codes.NORMAL, "User logged out"))
-            session = null
-        }
-        Log.d("RealtimeChatManager", "Disconnected.")
+    }
+
+    // Call this when the app is being destroyed or the user logs out completely
+    fun cleanup() {
+        scope.cancel()
     }
 
     private fun MessageDto.toMessage(): Message {
         return Message(
             id = this.id,
-            chatId = this.chat_id,
-            senderId = this.sender_id,
+            chatId = this.chatId,
+            senderId = this.senderId,
             text = this.text,
-            timestamp = parseRfc3339(this.created_at)
+            timestamp = parseRfc3339(this.createdAt)
         )
     }
 
@@ -117,7 +125,8 @@ class RealtimeChatManager @Inject constructor(
                 .toInstant()
                 .toEpochMilli()
         } catch (e: Exception) {
-            System.currentTimeMillis()
+            Timber.e(e, "Failed to parse timestamp: %s", timestamp)
+            0L
         }
     }
 }
