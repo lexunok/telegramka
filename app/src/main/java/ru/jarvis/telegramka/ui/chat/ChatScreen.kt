@@ -249,6 +249,8 @@ fun MessageInput(value: String, onValueChange: (String) -> Unit, onSend: () -> U
                                 RoundedCornerShape(12.dp)
                             )
                             .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .defaultMinSize(minHeight = 24.dp),
+                        contentAlignment = Alignment.CenterStart
                     ) {
                         if (value.isEmpty()) {
                             Text("Напишите сообщение...", color = MaterialTheme.colorScheme.onSurfaceVariant)

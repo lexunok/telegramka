@@ -14,6 +14,7 @@ import ru.jarvis.telegramka.data.remote.model.UserDto
 import ru.jarvis.telegramka.data.repository.ChatRepository
 import ru.jarvis.telegramka.data.repository.ProfileRepository
 import ru.jarvis.telegramka.data.repository.UserRepository
+import ru.jarvis.telegramka.data.storage.ITokenManager
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -32,7 +33,8 @@ class ChatsViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val profileRepository: ProfileRepository,
     private val userRepository: UserRepository,
-    private val realtimeChatManager: RealtimeChatManager
+    private val realtimeChatManager: RealtimeChatManager,
+    private val tokenManager: ITokenManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<ChatsUiState>(ChatsUiState.Loading)
     val uiState = _uiState.asStateFlow()
@@ -57,14 +59,19 @@ class ChatsViewModel @Inject constructor(
                 try {
                     val currentState = _uiState.value
                     if (currentState is ChatsUiState.Success) {
-                        val updatedChats = currentState.chats.map { chat ->
-                            if (chat.id == message.chatId) {
-                                chat.copy(lastMessage = message.text, lastMessageTime = message.timestamp)
-                            } else {
-                                chat
-                            }
-                        }.sortedByDescending { it.lastMessageTime }
-                        _uiState.value = currentState.copy(chats = updatedChats)
+                        val chatExists = currentState.chats.any { it.id == message.chatId }
+                        if (chatExists) {
+                            val updatedChats = currentState.chats.map { chat ->
+                                if (chat.id == message.chatId) {
+                                    chat.copy(lastMessage = message.text, lastMessageTime = message.timestamp)
+                                } else {
+                                    chat
+                                }
+                            }.sortedByDescending { it.lastMessageTime }
+                            _uiState.value = currentState.copy(chats = updatedChats)
+                        } else {
+                            loadData()
+                        }
                     }
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to process incoming message")
@@ -102,8 +109,10 @@ class ChatsViewModel @Inject constructor(
     }
 
     fun onLogout() {
-        realtimeChatManager.disconnect()
-        // Here you would also clear tokens, etc.
+        viewModelScope.launch {
+            tokenManager.clearTokens()
+            realtimeChatManager.disconnect()
+        }
     }
 
     fun onSearchQueryChanged(query: String) {

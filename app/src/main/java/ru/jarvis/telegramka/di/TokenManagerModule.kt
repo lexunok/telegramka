@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import ru.jarvis.telegramka.data.storage.ITokenManager
 import ru.jarvis.telegramka.data.storage.TokenManager
 import javax.inject.Singleton
 
@@ -15,7 +16,7 @@ object TokenManagerModule {
 
     @Provides
     @Singleton
-    fun provideTokenManager(@ApplicationContext context: Context): TokenManager {
+    fun provideTokenManager(@ApplicationContext context: Context): ITokenManager {
         TokenManager.initialize(context)
         return TokenManager
     }

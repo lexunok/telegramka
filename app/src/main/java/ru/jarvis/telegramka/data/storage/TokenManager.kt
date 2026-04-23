@@ -11,37 +11,45 @@ import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "auth_preferences")
 
-object TokenManager {
+interface ITokenManager {
+    fun initialize(context: Context)
+    suspend fun saveTokens(accessToken: String, refreshToken: String)
+    fun getAccessToken(): Flow<String?>
+    fun getRefreshToken(): Flow<String?>
+    suspend fun clearTokens()
+}
+
+object TokenManager : ITokenManager {
 
     private lateinit var applicationContext: Context
 
     private val ACCESS_TOKEN_KEY = stringPreferencesKey("access_token")
     private val REFRESH_TOKEN_KEY = stringPreferencesKey("refresh_token")
 
-    fun initialize(context: Context) {
+    override fun initialize(context: Context) {
         applicationContext = context.applicationContext
     }
 
-    suspend fun saveTokens(accessToken: String, refreshToken: String) {
+    override suspend fun saveTokens(accessToken: String, refreshToken: String) {
         applicationContext.dataStore.edit { preferences ->
             preferences[ACCESS_TOKEN_KEY] = accessToken
             preferences[REFRESH_TOKEN_KEY] = refreshToken
         }
     }
 
-    fun getAccessToken(): Flow<String?> {
+    override fun getAccessToken(): Flow<String?> {
         return applicationContext.dataStore.data.map { preferences ->
             preferences[ACCESS_TOKEN_KEY]
         }
     }
 
-    fun getRefreshToken(): Flow<String?> {
+    override fun getRefreshToken(): Flow<String?> {
         return applicationContext.dataStore.data.map { preferences ->
             preferences[REFRESH_TOKEN_KEY]
         }
     }
 
-    suspend fun clearTokens() {
+    override suspend fun clearTokens() {
         applicationContext.dataStore.edit { preferences ->
             preferences.clear()
         }

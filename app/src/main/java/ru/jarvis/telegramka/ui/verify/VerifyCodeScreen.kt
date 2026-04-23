@@ -178,15 +178,19 @@ fun VerifyCodeScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(48.dp))
-                    } else {
-                        GradientButton(
-                            onClick = {
-                                viewModel.verifyCode(email, code)
-                            },
-                            enabled = isCodeValid
-                        ) {
+                    GradientButton(
+                        onClick = {
+                            viewModel.verifyCode(email, code)
+                        },
+                        enabled = isCodeValid && !isLoading
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
                             Text("Подтвердить")
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,

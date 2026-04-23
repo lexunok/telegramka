@@ -22,7 +22,7 @@ import kotlinx.serialization.json.Json
 import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.domain.model.Message
 import ru.jarvis.telegramka.data.remote.model.MessageDto
-import ru.jarvis.telegramka.data.storage.TokenManager
+import ru.jarvis.telegramka.data.storage.ITokenManager
 import ru.jarvis.telegramka.di.WebSocketHolder
 import timber.log.Timber
 import java.time.OffsetDateTime
@@ -33,7 +33,7 @@ import javax.inject.Singleton
 @Singleton
 class RealtimeChatManager @Inject constructor(
     webSocketHolder: WebSocketHolder,
-    private val tokenManager: TokenManager,
+    private val tokenManager: ITokenManager,
     private val json: Json
 ) {
     private val client = webSocketHolder.client

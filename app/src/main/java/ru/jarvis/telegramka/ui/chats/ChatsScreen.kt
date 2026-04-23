@@ -126,9 +126,10 @@ fun ChatsScreen(
                         query = searchQuery,
                         onQueryChanged = { viewModel.onSearchQueryChanged(it) }
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     if (filteredChats.isEmpty()) {
-                        EmptyChatsView(onAddContact = { showDialog = true })
+                        EmptyChatsView()
                     } else {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
                             items(filteredChats, key = { it.id }) { chat ->
@@ -247,7 +248,7 @@ fun SearchBar(query: String, onQueryChanged: (String) -> Unit) {
 
 
 @Composable
-fun EmptyChatsView(onAddContact: () -> Unit) {
+fun EmptyChatsView() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -283,11 +284,6 @@ fun EmptyChatsView(onAddContact: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(24.dp))
-        GradientButton(onClick = onAddContact) {
-            Icon(Icons.Default.PersonAdd, contentDescription = null)
-            Text("Добавить контакт")
-        }
     }
 }
 

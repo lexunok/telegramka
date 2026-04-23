@@ -19,7 +19,7 @@ import ru.jarvis.telegramka.data.remote.api.AuthService
 import ru.jarvis.telegramka.data.remote.api.ChatService
 import ru.jarvis.telegramka.data.remote.api.ProfileService
 import ru.jarvis.telegramka.data.remote.api.UserService
-import ru.jarvis.telegramka.data.storage.TokenManager
+import ru.jarvis.telegramka.data.storage.ITokenManager
 import javax.inject.Singleton
 
 @Module
@@ -68,7 +68,7 @@ object NetworkModule {
     fun provideAuthenticatedHttpClient(
         json: Json,
         authService: AuthService,
-        tokenManager: TokenManager
+        tokenManager: ITokenManager
     ): HttpClient {
         return HttpClient(CIO) {
             install(ContentNegotiation) {

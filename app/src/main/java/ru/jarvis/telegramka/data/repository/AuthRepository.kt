@@ -4,7 +4,7 @@ import io.ktor.client.plugins.auth.providers.BearerTokens
 import ru.jarvis.telegramka.data.mapper.toDomain
 import ru.jarvis.telegramka.data.remote.api.AuthResult
 import ru.jarvis.telegramka.data.remote.api.AuthService
-import ru.jarvis.telegramka.data.storage.TokenManager
+import ru.jarvis.telegramka.data.storage.ITokenManager
 import ru.jarvis.telegramka.domain.model.User
 import javax.inject.Inject
 
@@ -35,7 +35,7 @@ sealed class RefreshResult {
 
 class AuthRepository @Inject constructor(
     private val authService: AuthService,
-    private val tokenManager: TokenManager
+    private val tokenManager: ITokenManager
 ) {
 
     suspend fun login(email: String): LoginResult {

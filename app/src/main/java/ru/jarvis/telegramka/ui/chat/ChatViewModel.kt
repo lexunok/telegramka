@@ -41,7 +41,7 @@ class ChatViewModel @Inject constructor(
                     if (message.chatId == id) {
                         // Add the message only if it's not already in the list
                         if (_messages.value.none { it.id == message.id }) {
-                            _messages.value = _messages.value + message
+                            _messages.value += message
                         }
                     }
                 } catch (e: Exception) {
@@ -72,18 +72,24 @@ class ChatViewModel @Inject constructor(
     }
 
     fun sendMessage(text: String) {
-        val currentChatId = chatId ?: return
+        val idToSend = chatId ?: return
 
         viewModelScope.launch {
             try {
-                val result = chatRepository.sendMessage(currentChatId, text)
-                if (result.isFailure) {
-                    Timber.w(result.exceptionOrNull(), "Failed to send message to chat id: %s", currentChatId)
-                    _errorMessage.value = "Ошибка отправки сообщения: ${result.exceptionOrNull()?.message ?: "Неизвестная ошибка"}"
-                }
-                // Message will be echoed by the websocket, so no need to manually add it here
+                val result = chatRepository.sendMessage(idToSend, text)
+                result.fold(
+                    onSuccess = { sentMessage ->
+                        if (idToSend != sentMessage.chatId) {
+                            chatId = sentMessage.chatId
+                        }
+                    },
+                    onFailure = { exception ->
+                        Timber.w(exception, "Failed to send message to id: %s", idToSend)
+                        _errorMessage.value = "Ошибка отправки сообщения: ${exception.message ?: "Неизвестная ошибка"}"
+                    }
+                )
             } catch (e: Exception) {
-                Timber.e(e, "Failed to send message to chat id: %s", currentChatId)
+                Timber.e(e, "Failed to send message to id: %s", idToSend)
                 _errorMessage.value = "Ошибка отправки сообщения: ${e.message ?: "Неизвестная ошибка"}"
             }
         }
