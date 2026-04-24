@@ -66,29 +66,46 @@ fun ChatScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF0A0A0F),
-                        Color(0xFF12121A),
-                        Color(0xFF1A1630),
-                        Color(0xFF0A0A0F)
-                    ),
-                    start = Offset(0f, 0f),
-                    end = Offset(1000f, 2000f)
-                )
+    Scaffold(
+        topBar = {
+            ChatHeader(
+                name = name,
+                nickname = nickname,
+                onBack = { navController.popBackStack() }
             )
-    ) {
-        ChatHeader(
-            name = name,
-            nickname = nickname,
-            onBack = { navController.popBackStack() }
-        )
-
-        Box(modifier = Modifier.weight(1f)) {
+        },
+        bottomBar = {
+            MessageInput(
+                value = messageText,
+                onValueChange = { messageText = it },
+                onSend = {
+                    if (messageText.isNotBlank()) {
+                        viewModel.sendMessage(messageText)
+                        messageText = ""
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color(0xFF0A0A0F) // Match the original background color
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues) // Apply padding from Scaffold
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF0A0A0F),
+                            Color(0xFF12121A),
+                            Color(0xFF1A1630),
+                            Color(0xFF0A0A0F)
+                        ),
+                        start = Offset(0f, 0f),
+                        end = Offset(1000f, 2000f)
+                    )
+                )
+        ) {
             when (val state = uiState) {
                 is ChatUiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -96,7 +113,7 @@ fun ChatScreen(
                     }
                 }
                 is ChatUiState.Error -> {
-                    // Error is shown in snackbar, box is empty or shows previous state
+                    // Error is shown in snackbar, content area can be empty or show a placeholder
                 }
                 is ChatUiState.Success -> {
                     LazyColumn(
@@ -104,8 +121,7 @@ fun ChatScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 16.dp),
-
-                        ) {
+                    ) {
                         if (state.messages.isEmpty()) {
                             item {
                                 EmptyChatPlaceholder()
@@ -125,19 +141,6 @@ fun ChatScreen(
                 }
             }
         }
-
-
-        MessageInput(
-            value = messageText,
-            onValueChange = { messageText = it },
-            onSend = {
-                if (messageText.isNotBlank()) {
-                    viewModel.sendMessage(messageText)
-                    messageText = ""
-                }
-            }
-        )
-        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.imePadding())
     }
 }
 

@@ -2,9 +2,6 @@ package ru.jarvis.telegramka.data.remote.api
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.*
-import io.ktor.client.plugins.auth.Auth
-import io.ktor.client.plugins.auth.providers.BearerAuthProvider
-import io.ktor.client.plugins.plugin
 import io.ktor.client.request.*
 import io.ktor.http.*
 import ru.jarvis.telegramka.BuildConfig

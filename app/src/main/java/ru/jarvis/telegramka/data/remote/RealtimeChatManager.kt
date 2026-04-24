@@ -1,6 +1,8 @@
 package ru.jarvis.telegramka.data.remote
 
 import io.ktor.client.plugins.websocket.*
+import io.ktor.client.plugins.websocket.ws
+import io.ktor.client.plugins.websocket.wss
 import io.ktor.client.request.header
 import io.ktor.http.*
 import io.ktor.websocket.*
@@ -8,7 +10,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -60,15 +61,7 @@ class RealtimeChatManager @Inject constructor(
                     }
 
                     Timber.d("Attempting to connect...")
-                    client.webSocket(
-                        method = HttpMethod.Get,
-                        host = BuildConfig.WS_HOST,
-                        port = BuildConfig.WS_PORT,
-                        path = "/ws",
-                        request = {
-                            header(HttpHeaders.Authorization, "Bearer $token")
-                        }
-                    ) {
+                    val webSocketBlock: suspend DefaultClientWebSocketSession.() -> Unit = {
                         session = this
                         Timber.d("Connection established.")
                         for (frame in incoming) {
@@ -83,6 +76,29 @@ class RealtimeChatManager @Inject constructor(
                                 }
                             }
                         }
+                    }
+                    if (BuildConfig.DEBUG) {
+                        client.ws(
+                            method = HttpMethod.Get,
+                            host = BuildConfig.WS_HOST,
+                            port = BuildConfig.WS_PORT,
+                            path = "/ws",
+                            request = {
+                                header(HttpHeaders.Authorization, "Bearer $token")
+                            },
+                            block = webSocketBlock
+                        )
+                    } else {
+                        client.wss(
+                            method = HttpMethod.Get,
+                            host = BuildConfig.WS_HOST,
+                            port = BuildConfig.WS_PORT,
+                            path = "/ws",
+                            request = {
+                                header(HttpHeaders.Authorization, "Bearer $token")
+                            },
+                            block = webSocketBlock
+                        )
                     }
                 } catch (e: ClosedReceiveChannelException) {
                     Timber.w(e, "Connection closed. Reconnecting...")

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,9 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -211,22 +213,35 @@ fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit) {
 
                 DropdownMenu(
                     expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier
+                        .background(
+                            color = MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(12.dp)
+                        )
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Обновить аватарку") },
+                        text = { Text("Обновить аватарку", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                         onClick = { /*TODO*/ },
                         enabled = false,
+                        colors = MenuDefaults.itemColors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
                     )
                     DropdownMenuItem(
-                        text = { Text("Обновить приложение") },
+                        text = { Text("Обновить приложение", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                         onClick = { /*TODO*/ },
                         enabled = false,
+                        colors = MenuDefaults.itemColors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
                     )
-                    HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
+                    HorizontalDivider(Modifier.padding(horizontal = 8.dp), 1.dp, MaterialTheme.colorScheme.outline)
                     DropdownMenuItem(
-                        text = { Text("Выход") },
+                        text = { Text("Выход", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
                         onClick = onLogout,
+                        colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.error)
                     )
                 }
             }
