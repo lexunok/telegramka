@@ -1,11 +1,7 @@
 package ru.jarvis.telegramka.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -18,11 +14,6 @@ import ru.jarvis.telegramka.ui.login.LoginScreen
 import ru.jarvis.telegramka.ui.register.RegisterScreen
 import ru.jarvis.telegramka.ui.verify.VerifyCodeScreen
 
-private val NavigationEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-private const val NavigationDuration = 280
-private const val NavigationFadeDuration = 180
-private const val BackNavigationDuration = 180
-
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -32,27 +23,25 @@ fun AppNavigation() {
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(durationMillis = NavigationDuration, easing = NavigationEasing),
-                initialOffset = { fullWidth -> fullWidth / 6 }
-            ) + fadeIn(
-                animationSpec = tween(durationMillis = NavigationFadeDuration, easing = NavigationEasing),
-                initialAlpha = 0.92f
+                animationSpec = tween(220)
             )
         },
         exitTransition = {
-            fadeOut(
-                animationSpec = tween(durationMillis = NavigationFadeDuration, easing = NavigationEasing),
-                targetAlpha = 0.98f
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(220)
             )
         },
         popEnterTransition = {
-            EnterTransition.None
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(180)
+            )
         },
         popExitTransition = {
             slideOutOfContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(durationMillis = BackNavigationDuration, easing = NavigationEasing),
-                targetOffset = { fullWidth -> fullWidth / 5 }
+                animationSpec = tween(180)
             )
         }
     ) {
@@ -90,23 +79,6 @@ fun AppNavigation() {
                 navArgument("nickname") { type = NavType.StringType; nullable = true },
                 navArgument("currentUserId") { type = NavType.StringType; nullable = true }
             ),
-            enterTransition = {
-                slideIntoContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(durationMillis = 240, easing = NavigationEasing),
-                    initialOffset = { fullWidth -> fullWidth / 5 }
-                ) + fadeIn(
-                    animationSpec = tween(durationMillis = 160, easing = NavigationEasing),
-                    initialAlpha = 0.96f
-                )
-            },
-            popExitTransition = {
-                slideOutOfContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(durationMillis = BackNavigationDuration, easing = NavigationEasing),
-                    targetOffset = { fullWidth -> fullWidth / 5 }
-                )
-            }
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id")
             val name = backStackEntry.arguments?.getString("name")

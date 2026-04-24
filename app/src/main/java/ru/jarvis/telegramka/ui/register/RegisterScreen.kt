@@ -79,8 +79,9 @@ fun RegisterScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
-                .padding(32.dp),
-            contentAlignment = Alignment.Center
+                .padding(32.dp)
+                .padding(top = 64.dp),
+            contentAlignment = Alignment.TopCenter
         ) {
             AnimatedVisibility(
                 visible = visible,

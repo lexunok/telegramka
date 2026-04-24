@@ -9,10 +9,11 @@ import ru.jarvis.telegramka.data.remote.model.ChatDto
 import ru.jarvis.telegramka.data.remote.model.ErrorResponse
 import ru.jarvis.telegramka.data.remote.model.MessageDto
 import ru.jarvis.telegramka.data.remote.model.SendMessageRequest
+import ru.jarvis.telegramka.di.AuthClient
 import javax.inject.Inject
 
 class ChatService @Inject constructor(
-    private val client: HttpClient
+    @AuthClient private val client: HttpClient
 ) {
     private val baseUrl = BuildConfig.API_BASE_URL
 

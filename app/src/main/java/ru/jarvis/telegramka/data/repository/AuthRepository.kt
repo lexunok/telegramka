@@ -29,8 +29,8 @@ sealed class VerifyCodeResult {
 
 sealed class RefreshResult {
     data class Success(val tokens: BearerTokens) : RefreshResult()
-    data class Error(val message: String) : RefreshResult()
-    object NetworkError : RefreshResult()
+//    data class Error(val message: String) : RefreshResult()
+//    object NetworkError : RefreshResult()
 }
 
 class AuthRepository @Inject constructor(
@@ -67,20 +67,6 @@ class AuthRepository @Inject constructor(
             is AuthResult.Error -> VerifyCodeResult.Error(result.message)
             is AuthResult.NetworkError -> VerifyCodeResult.NetworkError
             else -> VerifyCodeResult.Error("Неизвестная ошибка верификации кода")
-        }
-    }
-
-    suspend fun refreshToken(oldRefreshToken: String): RefreshResult {
-        return when (val result = authService.refreshToken(oldRefreshToken)) {
-            is AuthResult.Success -> {
-                val newAccessToken = result.data.accessToken
-                val newRefreshToken = result.data.refreshToken
-                tokenManager.saveTokens(newAccessToken, newRefreshToken)
-                RefreshResult.Success(BearerTokens(newAccessToken, newRefreshToken))
-            }
-            is AuthResult.Error -> RefreshResult.Error(result.message)
-            is AuthResult.NetworkError -> RefreshResult.NetworkError
-            else -> RefreshResult.Error("Неизвестная ошибка обновления токена")
         }
     }
 }

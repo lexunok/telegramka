@@ -2,8 +2,10 @@ package ru.jarvis.telegramka.data.remote.api
 
 import io.ktor.client.HttpClient
 import io.ktor.client.call.*
+import io.ktor.client.plugins.auth.Auth
+import io.ktor.client.plugins.auth.providers.BearerAuthProvider
+import io.ktor.client.plugins.plugin
 import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
 import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.data.remote.model.ErrorResponse
@@ -11,6 +13,7 @@ import ru.jarvis.telegramka.data.remote.model.LoginRequest
 import ru.jarvis.telegramka.data.remote.model.AuthResponse
 import ru.jarvis.telegramka.data.remote.model.RegisterRequest
 import ru.jarvis.telegramka.data.remote.model.VerifyCodeRequest
+import ru.jarvis.telegramka.di.BaseClient
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -22,11 +25,12 @@ sealed class AuthResult<out T> {
 }
 
 class AuthService @Inject constructor(
-    private val client: HttpClient
+    @BaseClient private val client: HttpClient
 ) {
     private val baseUrl = BuildConfig.API_BASE_URL
 
     suspend fun login(email: String): AuthResult<Unit> {
+
         return try {
             val response = client.post("$baseUrl/auth/login") {
                 contentType(ContentType.Application.Json)

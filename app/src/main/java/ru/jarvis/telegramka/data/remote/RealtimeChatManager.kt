@@ -104,11 +104,6 @@ class RealtimeChatManager @Inject constructor(
         connectionJob = null
     }
 
-    // Call this when the app is being destroyed or the user logs out completely
-    fun cleanup() {
-        scope.cancel()
-    }
-
     private fun MessageDto.toMessage(): Message {
         return Message(
             id = this.id,

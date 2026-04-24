@@ -13,19 +13,31 @@ import io.ktor.client.plugins.logging.*
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
+import ru.jarvis.telegramka.data.remote.api.AuthResult
 import ru.jarvis.telegramka.data.remote.api.AuthService
 import ru.jarvis.telegramka.data.remote.api.ChatService
 import ru.jarvis.telegramka.data.remote.api.ProfileService
 import ru.jarvis.telegramka.data.remote.api.UserService
 import ru.jarvis.telegramka.data.storage.ITokenManager
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class BaseClient
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class AuthClient
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Provides
     @Singleton
     fun provideJson(): Json = Json {
@@ -37,8 +49,8 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    @UnauthenticatedClient
-    fun provideUnauthenticatedHttpClient(json: Json): HttpClient {
+    @BaseClient
+    fun provideBasicClient(json: Json): HttpClient {
         return HttpClient(CIO) {
             install(ContentNegotiation) {
                 json(json)
@@ -52,20 +64,20 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthService(@UnauthenticatedClient client: HttpClient): AuthService {
+    fun provideAuthService(@BaseClient client: HttpClient): AuthService {
         return AuthService(client)
     }
 
     @Provides
     @Singleton
-    fun provideUserService(@UnauthenticatedClient client: HttpClient): UserService {
+    fun provideUserService(@AuthClient client: HttpClient): UserService {
         return UserService(client)
     }
 
     @Provides
     @Singleton
-    @AuthenticatedClient
-    fun provideAuthenticatedHttpClient(
+    @AuthClient
+    fun provideHttpClient(
         json: Json,
         authService: AuthService,
         tokenManager: ITokenManager
@@ -93,7 +105,7 @@ object NetworkModule {
                         val oldRefreshToken = tokenManager.getRefreshToken().first()
                         if (oldRefreshToken != null) {
                             val result = authService.refreshToken(oldRefreshToken)
-                            if (result is ru.jarvis.telegramka.data.remote.api.AuthResult.Success) {
+                            if (result is AuthResult.Success) {
                                 tokenManager.saveTokens(result.data.accessToken, result.data.refreshToken)
                                 BearerTokens(result.data.accessToken, result.data.refreshToken)
                             } else {
@@ -123,13 +135,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideChatService(@AuthenticatedClient client: HttpClient): ChatService {
+    fun provideChatService(@AuthClient client: HttpClient): ChatService {
         return ChatService(client)
     }
 
     @Provides
     @Singleton
-    fun provideProfileService(@AuthenticatedClient client: HttpClient): ProfileService {
+    fun provideProfileService(@AuthClient client: HttpClient): ProfileService {
         return ProfileService(client)
     }
 }

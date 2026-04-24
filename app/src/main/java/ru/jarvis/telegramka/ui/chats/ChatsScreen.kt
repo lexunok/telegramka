@@ -15,16 +15,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.automirrored.filled.Message
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -152,7 +148,6 @@ fun ChatsScreen(
             error = searchUserError,
             onDismiss = {
                 viewModel.clearSearchError()
-                showDialog = false
             },
             onConfirm = { nickname ->
                 viewModel.findUser(nickname)
@@ -222,25 +217,16 @@ fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit) {
                         text = { Text("Обновить аватарку") },
                         onClick = { /*TODO*/ },
                         enabled = false,
-                        leadingIcon = { Icon(Icons.Filled.AccountCircle, contentDescription = null) }
                     )
                     DropdownMenuItem(
                         text = { Text("Обновить приложение") },
                         onClick = { /*TODO*/ },
                         enabled = false,
-                        leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) }
                     )
-                    Divider()
+                    HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
                     DropdownMenuItem(
                         text = { Text("Выход") },
                         onClick = onLogout,
-                        leadingIcon = {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
                     )
                 }
             }
@@ -459,11 +445,8 @@ fun AddContactDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Добавить контакт", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     TextField(
                         value = nickname,
                         onValueChange = { nickname = it },
@@ -484,7 +467,7 @@ fun AddContactDialog(
                             unfocusedIndicatorColor = Color.Transparent,
                         )
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     GradientButton(
                         onClick = { onConfirm(nickname) },
                         enabled = nickname.isNotBlank() && !isSearching

@@ -10,11 +10,10 @@ import kotlinx.coroutines.launch
 import ru.jarvis.telegramka.domain.model.Chat
 import ru.jarvis.telegramka.domain.model.User
 import ru.jarvis.telegramka.data.remote.RealtimeChatManager
-import ru.jarvis.telegramka.data.remote.model.UserDto
 import ru.jarvis.telegramka.data.repository.ChatRepository
 import ru.jarvis.telegramka.data.repository.ProfileRepository
+import ru.jarvis.telegramka.data.repository.TokenRepository
 import ru.jarvis.telegramka.data.repository.UserRepository
-import ru.jarvis.telegramka.data.storage.ITokenManager
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -33,8 +32,8 @@ class ChatsViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val profileRepository: ProfileRepository,
     private val userRepository: UserRepository,
+    private val tokenRepository: TokenRepository,
     private val realtimeChatManager: RealtimeChatManager,
-    private val tokenManager: ITokenManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow<ChatsUiState>(ChatsUiState.Loading)
     val uiState = _uiState.asStateFlow()
@@ -110,7 +109,7 @@ class ChatsViewModel @Inject constructor(
 
     fun onLogout() {
         viewModelScope.launch {
-            tokenManager.clearTokens()
+            tokenRepository.clearTokens()
             realtimeChatManager.disconnect()
         }
     }
@@ -120,6 +119,16 @@ class ChatsViewModel @Inject constructor(
     }
 
     fun findUser(nickname: String) {
+        val currentState = _uiState.value
+        if (currentState is ChatsUiState.Success) {
+            val ownNickname = currentState.currentUser.nickname
+            val enteredNickname = nickname.removePrefix("@")
+            if (ownNickname.equals(enteredNickname, ignoreCase = true)) {
+                _searchUserError.value = "Да это же вы)"
+                return
+            }
+        }
+
         viewModelScope.launch {
             _isSearchingUser.value = true
             _searchUserError.value = null
@@ -133,7 +142,6 @@ class ChatsViewModel @Inject constructor(
                     },
                     onFailure = {
                         Timber.w(it, "User not found for nickname: %s", cleanedNickname)
-                        // TODO: Use string resources
                         _searchUserError.value = "Пользователь не найден"
                     }
                 )

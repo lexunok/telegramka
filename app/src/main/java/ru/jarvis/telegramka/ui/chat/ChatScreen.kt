@@ -342,7 +342,7 @@ fun DateSeparator(timestamp: Long) {
                 .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Text(
-                text = SimpleDateFormat("d MMMM", Locale("ru")).format(Date(timestamp)),
+                text = SimpleDateFormat("d MMMM", Locale.forLanguageTag("ru-RU")).format(Date(timestamp)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondary
             )

@@ -7,10 +7,11 @@ import io.ktor.http.*
 import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.data.remote.model.ErrorResponse
 import ru.jarvis.telegramka.data.remote.model.UserDto
+import ru.jarvis.telegramka.di.AuthClient
 import javax.inject.Inject
 
 class ProfileService @Inject constructor(
-    private val client: HttpClient
+    @AuthClient private val client: HttpClient
 ) {
     private val baseUrl = BuildConfig.API_BASE_URL
 

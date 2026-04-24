@@ -24,7 +24,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import kotlinx.coroutines.flow.collectLatest
 import ru.jarvis.telegramka.navigation.Screen
 import ru.jarvis.telegramka.ui.theme.AppMotion
 import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
@@ -81,8 +80,9 @@ fun LoginScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
-                .padding(32.dp),
-            contentAlignment = Alignment.Center
+                .padding(32.dp)
+                .padding(top = 64.dp),
+            contentAlignment = Alignment.TopCenter
         ) {
             AnimatedVisibility(
                 visible = visible,

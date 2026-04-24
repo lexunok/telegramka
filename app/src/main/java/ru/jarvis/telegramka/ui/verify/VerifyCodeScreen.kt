@@ -2,11 +2,8 @@ package ru.jarvis.telegramka.ui.verify
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -106,8 +103,9 @@ fun VerifyCodeScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
-                .padding(32.dp),
-            contentAlignment = Alignment.Center
+                .padding(32.dp)
+                .padding(top = 64.dp),
+            contentAlignment = Alignment.TopCenter
         ) {
             AnimatedVisibility(
                 visible = visible,
