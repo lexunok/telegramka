@@ -3,15 +3,21 @@ package ru.jarvis.telegramka.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import ru.jarvis.telegramka.domain.model.Message
 import ru.jarvis.telegramka.data.remote.RealtimeChatManager
 import ru.jarvis.telegramka.data.repository.ChatRepository
+import ru.jarvis.telegramka.domain.model.Message
 import timber.log.Timber
 import javax.inject.Inject
+
+sealed interface ChatUiState {
+    data class Success(val messages: List<Message>) : ChatUiState
+    data class Error(val message: String) : ChatUiState
+    object Loading : ChatUiState
+}
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -19,35 +25,34 @@ class ChatViewModel @Inject constructor(
     private val realtimeChatManager: RealtimeChatManager
 ) : ViewModel() {
 
-    private val _messages = MutableStateFlow<List<Message>>(emptyList())
-    val messages = _messages.asStateFlow()
+    private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Loading)
+    val uiState = _uiState.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
-
-    private var chatId: String? = null
+    private val _chatId = MutableStateFlow<String?>(null)
     private var currentUserId: String? = null
+    private var messageCollectorJob: Job? = null
 
-    // TODO: Use SavedStateHandle to receive navigation arguments instead of this manual method.
-    // This will make the ViewModel more robust and survive process death correctly.
     fun initialize(id: String, currentUserId: String) {
-        this.chatId = id
+        if (_chatId.value == id && this.currentUserId == currentUserId) return
+
+        _chatId.value = id
         this.currentUserId = currentUserId
         loadMessages(id)
 
-        viewModelScope.launch {
+        messageCollectorJob?.cancel()
+        messageCollectorJob = viewModelScope.launch {
             realtimeChatManager.incomingMessages.collect { message ->
                 try {
-                    if (message.chatId == id) {
-                        // Add the message only if it's not already in the list
-                        if (_messages.value.none { it.id == message.id }) {
-                            _messages.value += message
+                    if (message.chatId == _chatId.value) {
+                        val currentState = _uiState.value
+                        if (currentState is ChatUiState.Success) {
+                            if (currentState.messages.none { it.id == message.id }) {
+                                _uiState.value = currentState.copy(messages = currentState.messages + message)
+                            }
                         }
                     }
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to process incoming message")
-                    // Log the error, but don't crash the collector
-                    _errorMessage.value = "Error processing incoming message."
                 }
             }
         }
@@ -55,24 +60,25 @@ class ChatViewModel @Inject constructor(
 
     private fun loadMessages(id: String) {
         viewModelScope.launch {
+            _uiState.value = ChatUiState.Loading
             try {
                 val result = chatRepository.getMessages(id)
                 result.fold(
-                    onSuccess = { _messages.value = it },
+                    onSuccess = { _uiState.value = ChatUiState.Success(it) },
                     onFailure = {
                         Timber.w(it, "Failed to load messages for chat id: %s", id)
-                        _errorMessage.value = it.message ?: "Failed to load messages"
+                        _uiState.value = ChatUiState.Error(it.message ?: "Failed to load messages")
                     }
                 )
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load messages for chat id: %s", id)
-                _errorMessage.value = e.message ?: "An unexpected error occurred"
+                _uiState.value = ChatUiState.Error(e.message ?: "An unexpected error occurred")
             }
         }
     }
 
     fun sendMessage(text: String) {
-        val idToSend = chatId ?: return
+        val idToSend = _chatId.value ?: return
 
         viewModelScope.launch {
             try {
@@ -80,22 +86,26 @@ class ChatViewModel @Inject constructor(
                 result.fold(
                     onSuccess = { sentMessage ->
                         if (idToSend != sentMessage.chatId) {
-                            chatId = sentMessage.chatId
+                            _chatId.value = sentMessage.chatId
                         }
                     },
                     onFailure = { exception ->
                         Timber.w(exception, "Failed to send message to id: %s", idToSend)
-                        _errorMessage.value = "Ошибка отправки сообщения: ${exception.message ?: "Неизвестная ошибка"}"
+                        _uiState.value = ChatUiState.Error("Ошибка отправки сообщения: ${exception.message ?: "Неизвестная ошибка"}")
                     }
                 )
             } catch (e: Exception) {
                 Timber.e(e, "Failed to send message to id: %s", idToSend)
-                _errorMessage.value = "Ошибка отправки сообщения: ${e.message ?: "Неизвестная ошибка"}"
+                _uiState.value = ChatUiState.Error("Ошибка отправки сообщения: ${e.message ?: "Неизвестная ошибка"}")
             }
         }
     }
 
     fun consumeErrorMessage() {
-        _errorMessage.value = null
+        val currentState = _uiState.value
+        if (currentState is ChatUiState.Error) {
+            _uiState.value = ChatUiState.Loading
+            loadMessages(_chatId.value ?: return)
+        }
     }
 }

@@ -31,8 +31,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // buildConfigField "String", "WS_HOST", "\"your_production_host\""
-            // buildConfigField "int", "WS_PORT", "your_production_port"
+            buildConfigField("String", "API_BASE_URL", "\"https://jarvis-system.ru/api\"")
+            buildConfigField("String", "WS_HOST", "\"jarvis-system.ru\"")
+            buildConfigField("int", "WS_PORT", "443")
         }
         getByName("debug") {
             // Host for Android Emulator to connect to the host machine's localhost

@@ -44,8 +44,7 @@ fun ChatScreen(
     currentUserId: String,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
-    val messages by viewModel.messages.collectAsStateWithLifecycle()
-    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -54,16 +53,15 @@ fun ChatScreen(
         viewModel.initialize(id, currentUserId)
     }
 
-    LaunchedEffect(messages.size) {
-        // Scroll to the latest message. Assuming messages are ordered from oldest to newest.
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+    LaunchedEffect(uiState) {
+        val state = uiState
+        if (state is ChatUiState.Success) {
+            if (state.messages.isNotEmpty()) {
+                listState.animateScrollToItem(state.messages.lastIndex)
+            }
         }
-    }
-
-    LaunchedEffect(errorMessage) {
-        errorMessage?.let {
-            snackbarHostState.showSnackbar(it)
+        if (state is ChatUiState.Error) {
+            snackbarHostState.showSnackbar(state.message)
             viewModel.consumeErrorMessage()
         }
     }
@@ -90,26 +88,40 @@ fun ChatScreen(
             onBack = { navController.popBackStack() }
         )
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp),
-
-        ) {
-            if (messages.isEmpty()) {
-                item {
-                    EmptyChatPlaceholder()
-                }
-            } else {
-                itemsIndexed(messages) { index, message ->
-                    val prevMessage = messages.getOrNull(index - 1) // Check previous message
-                    val showDate = prevMessage == null || !isSameDay(prevMessage.timestamp, message.timestamp)
-
-                    if (showDate) {
-                        DateSeparator(timestamp = message.timestamp)
+        Box(modifier = Modifier.weight(1f)) {
+            when (val state = uiState) {
+                is ChatUiState.Loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
                     }
-                    MessageItem(message = message, currentUserId = currentUserId)
+                }
+                is ChatUiState.Error -> {
+                    // Error is shown in snackbar, box is empty or shows previous state
+                }
+                is ChatUiState.Success -> {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+
+                        ) {
+                        if (state.messages.isEmpty()) {
+                            item {
+                                EmptyChatPlaceholder()
+                            }
+                        } else {
+                            itemsIndexed(state.messages) { index, message ->
+                                val prevMessage = state.messages.getOrNull(index - 1)
+                                val showDate = prevMessage == null || !isSameDay(prevMessage.timestamp, message.timestamp)
+
+                                if (showDate) {
+                                    DateSeparator(timestamp = message.timestamp)
+                                }
+                                MessageItem(message = message, currentUserId = currentUserId)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -204,7 +216,7 @@ fun MessageItem(message: Message, currentUserId: String) {
         Box(
             modifier = messageBubbleModifier
                 .clip(bubbleShape)
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Column {
                 Text(
