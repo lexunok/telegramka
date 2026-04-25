@@ -2,7 +2,15 @@ package ru.jarvis.telegramka.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,10 +24,27 @@ import ru.jarvis.telegramka.ui.verify.VerifyCodeScreen
 
 @Composable
 fun AppNavigation() {
+    val viewModel: AppNavigationViewModel = hiltViewModel()
+    val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
+
+    if (sessionState == SessionState.Loading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
     val navController = rememberNavController()
     NavHost(
         navController = navController,
-        startDestination = Screen.Login.route,
+        startDestination = if (sessionState == SessionState.Authorized) {
+            Screen.Chats.route
+        } else {
+            Screen.Login.route
+        },
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,

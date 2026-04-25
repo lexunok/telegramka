@@ -77,6 +77,7 @@ fun RegisterScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .safeDrawingPadding()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
                 .padding(32.dp)

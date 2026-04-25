@@ -37,9 +37,11 @@ android {
         }
         getByName("debug") {
             // Host for Android Emulator to connect to the host machine's localhost
-            buildConfigField("String", "WS_HOST", "\"10.0.2.2\"")
+//            buildConfigField("String", "WS_HOST", "\"10.0.2.2\"")
+            buildConfigField("String", "WS_HOST", "\"192.168.1.6\"")
             buildConfigField("int", "WS_PORT", "3000")
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api\"")
+//            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api\"")
+            buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.6:3000/api\"")
         }
     }
     compileOptions {

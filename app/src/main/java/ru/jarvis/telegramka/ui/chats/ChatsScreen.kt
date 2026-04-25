@@ -109,6 +109,7 @@ fun ChatsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .statusBarsPadding()
                         .background(MaterialTheme.colorScheme.background)
                 ) {
                     TopBar(
@@ -149,6 +150,7 @@ fun ChatsScreen(
             isSearching = isSearchingUser,
             error = searchUserError,
             onDismiss = {
+                showDialog = false
                 viewModel.clearSearchError()
             },
             onConfirm = { nickname ->
@@ -162,7 +164,7 @@ fun ChatsScreen(
 fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
@@ -448,8 +450,7 @@ fun AddContactDialog(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(32.dp)
-                    .clickable(enabled = false) {},
+                    .padding(32.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
