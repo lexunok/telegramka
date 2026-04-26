@@ -16,7 +16,9 @@ fun MessageDto.toDomain(): Message {
         chatId = this.chatId,
         senderId = this.senderId,
         text = this.text,
-        timestamp = parseRfc3339(this.createdAt)
+        timestamp = parseRfc3339(this.createdAt),
+        isPending = false,
+        isFailed = false
     )
 }
 

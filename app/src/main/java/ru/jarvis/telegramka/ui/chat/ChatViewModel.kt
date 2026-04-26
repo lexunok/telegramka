@@ -11,6 +11,7 @@ import ru.jarvis.telegramka.data.remote.RealtimeChatManager
 import ru.jarvis.telegramka.data.repository.ChatRepository
 import ru.jarvis.telegramka.domain.model.Message
 import timber.log.Timber
+import java.util.UUID
 import javax.inject.Inject
 
 sealed interface ChatUiState {
@@ -46,8 +47,9 @@ class ChatViewModel @Inject constructor(
                     if (message.chatId == _chatId.value) {
                         val currentState = _uiState.value
                         if (currentState is ChatUiState.Success) {
-                            if (currentState.messages.none { it.id == message.id }) {
-                                _uiState.value = currentState.copy(messages = currentState.messages + message)
+                            val updatedMessages = currentState.messages.reconcileIncomingMessage(message)
+                            if (updatedMessages !== currentState.messages) {
+                                _uiState.value = currentState.copy(messages = updatedMessages)
                             }
                         }
                     }
@@ -79,24 +81,38 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage(text: String) {
         val idToSend = _chatId.value ?: return
+        val senderId = currentUserId ?: return
+        val messageId = UUID.randomUUID().toString()
+        val optimisticMessage = Message(
+            id = messageId,
+            chatId = idToSend,
+            senderId = senderId,
+            text = text,
+            timestamp = System.currentTimeMillis(),
+            isPending = true,
+            isFailed = false
+        )
+
+        appendOptimisticMessage(optimisticMessage)
 
         viewModelScope.launch {
             try {
-                val result = chatRepository.sendMessage(idToSend, text)
+                val result = chatRepository.sendMessage(idToSend, messageId, text)
                 result.fold(
                     onSuccess = { sentMessage ->
+                        replaceMessage(optimisticMessage.id, sentMessage)
                         if (idToSend != sentMessage.chatId) {
                             _chatId.value = sentMessage.chatId
                         }
                     },
                     onFailure = { exception ->
+                        markMessageAsFailed(optimisticMessage.id)
                         Timber.w(exception, "Failed to send message to id: %s", idToSend)
-                        _uiState.value = ChatUiState.Error("Ошибка отправки сообщения: ${exception.message ?: "Неизвестная ошибка"}")
                     }
                 )
             } catch (e: Exception) {
+                markMessageAsFailed(optimisticMessage.id)
                 Timber.e(e, "Failed to send message to id: %s", idToSend)
-                _uiState.value = ChatUiState.Error("Ошибка отправки сообщения: ${e.message ?: "Неизвестная ошибка"}")
             }
         }
     }
@@ -108,4 +124,46 @@ class ChatViewModel @Inject constructor(
             loadMessages(_chatId.value ?: return)
         }
     }
+
+    private fun appendOptimisticMessage(message: Message) {
+        val currentState = _uiState.value
+        if (currentState is ChatUiState.Success) {
+            _uiState.value = currentState.copy(messages = currentState.messages + message)
+        }
+    }
+
+    private fun replaceMessage(targetId: String, replacement: Message) {
+        val currentState = _uiState.value
+        if (currentState is ChatUiState.Success) {
+            _uiState.value = currentState.copy(
+                messages = currentState.messages.map { message ->
+                    if (message.id == targetId) replacement else message
+                }
+            )
+        }
+    }
+
+    private fun markMessageAsFailed(targetId: String) {
+        val currentState = _uiState.value
+        if (currentState is ChatUiState.Success) {
+            _uiState.value = currentState.copy(
+                messages = currentState.messages.map { message ->
+                    if (message.id == targetId) {
+                        message.copy(isPending = false, isFailed = true)
+                    } else {
+                        message
+                    }
+                }
+            )
+        }
+    }
+}
+
+private fun List<Message>.reconcileIncomingMessage(incomingMessage: Message): List<Message> {
+    val existingIndex = indexOfFirst { it.id == incomingMessage.id }
+    if (existingIndex >= 0) {
+        return toMutableList().also { it[existingIndex] = incomingMessage }
+    }
+
+    return this + incomingMessage
 }

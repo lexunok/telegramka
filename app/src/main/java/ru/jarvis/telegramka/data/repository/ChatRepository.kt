@@ -32,10 +32,10 @@ class ChatRepository @Inject constructor(private val chatService: ChatService) {
         }
     }
 
-    suspend fun sendMessage(chatId: String, text: String): Result<Message> {
+    suspend fun sendMessage(chatId: String, messageId: String, text: String): Result<Message> {
         return try {
-            val request = SendMessageRequest(text)
-            val sentMessageDto = chatService.sendMessage(chatId, request)
+            val request = SendMessageRequest(id = messageId, chatId = chatId, text = text)
+            val sentMessageDto = chatService.sendMessage(request)
             Result.success(sentMessageDto.toDomain())
         } catch (e: Exception) {
             Timber.e(e, "Failed to send message to chat id: %s", chatId)

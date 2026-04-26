@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,7 +14,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Mood
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,21 +50,56 @@ fun ChatScreen(
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val successState = uiState as? ChatUiState.Success
+    val chatItems = remember(successState?.messages) {
+        successState?.messages?.toChatListItems().orEmpty()
+    }
     var messageText by remember { mutableStateOf("") }
-    val listState = rememberLazyListState()
+    val listState = if (successState != null) {
+        remember(id) {
+            LazyListState(
+                firstVisibleItemIndex = chatItems.lastIndex.coerceAtLeast(0)
+            )
+        }
+    } else {
+        rememberLazyListState()
+    }
     val snackbarHostState = remember { SnackbarHostState() }
+    var previousMessageCount by remember(id) { mutableIntStateOf(0) }
+    var wasAtBottom by remember(id) { mutableStateOf(true) }
+    var lastMessageId by remember(id) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(id, currentUserId) {
         viewModel.initialize(id, currentUserId)
     }
 
-    LaunchedEffect(uiState) {
-        val state = uiState
-        if (state is ChatUiState.Success) {
-            if (state.messages.isNotEmpty()) {
-                listState.animateScrollToItem(state.messages.lastIndex)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isAtBottom() }
+            .collect { atBottom -> wasAtBottom = atBottom }
+    }
+
+    LaunchedEffect(successState?.messages?.lastOrNull()?.id) {
+        val messages = successState?.messages.orEmpty()
+        val messageCount = messages.size
+        val latestMessage = messages.lastOrNull()
+        if (messageCount > 0) {
+            val lastIndex = chatItems.lastIndex
+            if (previousMessageCount == 0) {
+                listState.scrollToItem(lastIndex)
+            } else if (
+                latestMessage != null &&
+                latestMessage.id != lastMessageId &&
+                (wasAtBottom || latestMessage.senderId == currentUserId)
+            ) {
+                listState.animateScrollToItem(lastIndex)
             }
         }
+        previousMessageCount = messageCount
+        lastMessageId = latestMessage?.id
+    }
+
+    LaunchedEffect(uiState) {
+        val state = uiState
         if (state is ChatUiState.Error) {
             snackbarHostState.showSnackbar(state.message)
             viewModel.consumeErrorMessage()
@@ -124,19 +163,27 @@ fun ChatScreen(
                             .fillMaxSize()
                             .padding(horizontal = 16.dp),
                     ) {
-                        if (state.messages.isEmpty()) {
+                        if (chatItems.isEmpty()) {
                             item {
                                 EmptyChatPlaceholder()
                             }
                         } else {
-                            itemsIndexed(state.messages) { index, message ->
-                                val prevMessage = state.messages.getOrNull(index - 1)
-                                val showDate = prevMessage == null || !isSameDay(prevMessage.timestamp, message.timestamp)
-
-                                if (showDate) {
-                                    DateSeparator(timestamp = message.timestamp)
+                            itemsIndexed(
+                                items = chatItems,
+                                key = { index, item ->
+                                    when (item) {
+                                        is ChatListItem.Date -> "date-${item.timestamp}-$index"
+                                        is ChatListItem.MessageItem -> item.message.id
+                                    }
                                 }
-                                MessageItem(message = message, currentUserId = currentUserId)
+                            ) { _, item ->
+                                when (item) {
+                                    is ChatListItem.Date -> DateSeparator(timestamp = item.timestamp)
+                                    is ChatListItem.MessageItem -> MessageItem(
+                                        message = item.message,
+                                        currentUserId = currentUserId
+                                    )
+                                }
                             }
                         }
                     }
@@ -144,6 +191,33 @@ fun ChatScreen(
             }
         }
     }
+}
+
+private fun LazyListState.isAtBottom(): Boolean {
+    val totalItemsCount = layoutInfo.totalItemsCount
+    if (totalItemsCount == 0) return true
+    val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: return true
+    return lastVisibleItemIndex >= totalItemsCount - 2
+}
+
+private sealed interface ChatListItem {
+    data class Date(val timestamp: Long) : ChatListItem
+    data class MessageItem(val message: Message) : ChatListItem
+}
+
+private fun List<Message>.toChatListItems(): List<ChatListItem> {
+    if (isEmpty()) return emptyList()
+
+    val result = mutableListOf<ChatListItem>()
+    forEachIndexed { index, message ->
+        val prevMessage = getOrNull(index - 1)
+        val showDate = prevMessage == null || !isSameDay(prevMessage.timestamp, message.timestamp)
+        if (showDate) {
+            result += ChatListItem.Date(message.timestamp)
+        }
+        result += ChatListItem.MessageItem(message)
+    }
+    return result
 }
 
 @Composable
@@ -161,35 +235,49 @@ fun ChatHeader(name: String, nickname: String, onBack: () -> Unit) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-                Spacer(modifier = Modifier.width(8.dp))
                 Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-                            )
-                        ),
+                    modifier = Modifier.width(48.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+                Box(
+                    modifier = Modifier.weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = name.firstOrNull()?.uppercase() ?: "",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(text = name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                        Text(text = "@$nickname", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(text = name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                    Text(text = "@$nickname", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                Box(
+                    modifier = Modifier
+                        .width(48.dp),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = name.firstOrNull()?.uppercase() ?: "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                 }
             }
         }
@@ -236,12 +324,37 @@ fun MessageItem(message: Message, currentUserId: String) {
                     color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = formatMessageTime(message.timestamp),
-                    style = MaterialTheme.typography.bodySmall,
+                Row(
                     modifier = Modifier.align(Alignment.End),
-                    color = (if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface).copy(alpha = 0.7f)
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = formatMessageTime(message.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = (if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface).copy(alpha = 0.7f)
+                    )
+                    if (isCurrentUser) {
+                        val statusTint = when {
+                            message.isFailed -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                        }
+                        Icon(
+                            imageVector = when {
+                                message.isFailed -> Icons.Default.ErrorOutline
+                                message.isPending -> Icons.Default.Schedule
+                                else -> Icons.Default.Check
+                            },
+                            contentDescription = when {
+                                message.isFailed -> "Не отправлено"
+                                message.isPending -> "Отправляется"
+                                else -> "Доставлено"
+                            },
+                            modifier = Modifier.size(14.dp),
+                            tint = statusTint
+                        )
+                    }
+                }
             }
         }
     }
@@ -265,7 +378,10 @@ fun MessageInput(value: String, onValueChange: (String) -> Unit, onSend: () -> U
                 BasicTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(max = 120.dp),
+                    maxLines = 5,
                     textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = MaterialTheme.typography.bodyLarge.fontSize),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                     decorationBox = { innerTextField ->
@@ -275,6 +391,7 @@ fun MessageInput(value: String, onValueChange: (String) -> Unit, onSend: () -> U
                                     MaterialTheme.colorScheme.secondaryContainer,
                                     RoundedCornerShape(12.dp)
                                 )
+                                .heightIn(max = 120.dp)
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
                                 .defaultMinSize(minHeight = 24.dp),
                             contentAlignment = Alignment.CenterStart

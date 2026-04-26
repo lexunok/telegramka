@@ -37,8 +37,8 @@ class ChatService @Inject constructor(
         }
     }
 
-    suspend fun sendMessage(chatId: String, request: SendMessageRequest): MessageDto {
-        val response = client.post("$baseUrl/chats/$chatId/messages") {
+    suspend fun sendMessage(request: SendMessageRequest): MessageDto {
+        val response = client.post("$baseUrl/chats/messages") {
             contentType(ContentType.Application.Json)
             setBody(request)
         }

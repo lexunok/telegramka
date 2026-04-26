@@ -5,5 +5,7 @@ data class Message(
     val chatId: String,
     val senderId: String,
     val text: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val isPending: Boolean = false,
+    val isFailed: Boolean = false
 )
