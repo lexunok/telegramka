@@ -1,5 +1,8 @@
 package ru.jarvis.telegramka.ui.chats
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -18,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.foundation.border
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.MenuDefaults
@@ -29,17 +31,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import coil.compose.AsyncImage
+import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.domain.model.Chat
 import ru.jarvis.telegramka.domain.model.User
 import ru.jarvis.telegramka.navigation.Screen
@@ -61,6 +68,19 @@ fun ChatsScreen(
     val navigationEvent by viewModel.navigationEvent.collectAsStateWithLifecycle()
 
     var showDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            context.contentResolver.openInputStream(it)?.use { inputStream ->
+                val byteArray = inputStream.readBytes()
+                val mimeType = context.contentResolver.getType(it)
+                viewModel.updateAvatar(byteArray, mimeType)
+            }
+        }
+    }
 
     LaunchedEffect(navigationEvent) {
         navigationEvent?.let { event ->
@@ -120,6 +140,9 @@ fun ChatsScreen(
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.Chats.route) { inclusive = true }
                             }
+                        },
+                        onUpdateAvatar = {
+                            imagePickerLauncher.launch("image/*")
                         }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
@@ -161,8 +184,9 @@ fun ChatsScreen(
 }
 
 @Composable
-fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit) {
+fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit, onUpdateAvatar: () -> Unit) {
     var showMenu by remember { mutableStateOf(false) }
+    val baseUrl = BuildConfig.API_BASE_URL.removeSuffix("/api")
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
@@ -179,24 +203,12 @@ fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit) {
                         onClick = { showMenu = true }
                     )
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = user.name.first().uppercase(),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
+                    UserAvatar(
+                        avatarUrl = user.avatarUrl,
+                        name = user.name,
+                        baseUrl = baseUrl,
+                        size = 40.dp
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
@@ -225,11 +237,10 @@ fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit) {
                 ) {
                     DropdownMenuItem(
                         text = { Text("Обновить аватарку", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-                        onClick = { /*TODO*/ },
-                        enabled = false,
-                        colors = MenuDefaults.itemColors(
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                        )
+                        onClick = {
+                            onUpdateAvatar()
+                            showMenu = false
+                        }
                     )
                     DropdownMenuItem(
                         text = { Text("Обновить приложение", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
@@ -331,6 +342,7 @@ fun EmptyChatsView() {
 fun ChatListItem(chat: Chat, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val baseUrl = BuildConfig.API_BASE_URL.removeSuffix("/api")
     Column {
         Row(
             modifier = Modifier
@@ -344,23 +356,12 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = chat.name.first().uppercaseChar().toString(),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-            }
+            UserAvatar(
+                avatarUrl = chat.avatarUrl,
+                name = chat.name,
+                baseUrl = baseUrl,
+                size = 48.dp
+            )
 
             Spacer(modifier = Modifier.width(16.dp))
 
@@ -428,6 +429,45 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
 }
 
 @Composable
+fun UserAvatar(
+    avatarUrl: String?,
+    name: String,
+    baseUrl: String,
+    modifier: Modifier = Modifier,
+    size: Dp = 48.dp
+) {
+    if (avatarUrl != null) {
+        AsyncImage(
+            model = "$baseUrl/$avatarUrl",
+            contentDescription = "$name's avatar",
+            modifier = modifier
+                .size(size)
+                .clip(CircleShape),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
+                    )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = name.first().uppercaseChar().toString(),
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+    }
+}
+
+
+@Composable
 fun AddContactDialog(
     isSearching: Boolean,
     error: String?,
@@ -460,7 +500,7 @@ fun AddContactDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Добавить контакт", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                        Text("Добавить контакт", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     TextField(
@@ -483,7 +523,6 @@ fun AddContactDialog(
                             unfocusedIndicatorColor = Color.Transparent,
                         )
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
                     GradientButton(
                         onClick = { onConfirm(nickname) },
                         enabled = nickname.isNotBlank() && !isSearching

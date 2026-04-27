@@ -18,4 +18,14 @@ class ProfileRepository @Inject constructor(private val profileService: ProfileS
             Result.failure(e)
         }
     }
+
+    suspend fun updateAvatar(avatar: ByteArray, mimeType: String?): Result<String> {
+        return try {
+            val response = profileService.updateAvatar(avatar, mimeType)
+            Result.success(response.path)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update avatar")
+            Result.failure(e)
+        }
+    }
 }

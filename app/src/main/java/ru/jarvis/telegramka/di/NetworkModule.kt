@@ -5,7 +5,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.*
 import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -51,13 +52,33 @@ object NetworkModule {
     @Singleton
     @BaseClient
     fun provideBasicClient(json: Json): HttpClient {
-        return HttpClient(CIO) {
+        return HttpClient(OkHttp) {
+            engine {
+                config {
+                    retryOnConnectionFailure(true)
+
+                    connectionPool(
+                        okhttp3.ConnectionPool(
+                            5,
+                            5, java.util.concurrent.TimeUnit.MINUTES
+                        )
+                    )
+
+                    connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                }
+            }
             install(ContentNegotiation) {
                 json(json)
             }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 15000
+                connectTimeoutMillis = 10000
+                socketTimeoutMillis = 10000
+            }
             install(Logging) {
-                logger = Logger.DEFAULT
-                level = LogLevel.ALL
+                level = LogLevel.NONE
             }
         }
     }
@@ -82,13 +103,33 @@ object NetworkModule {
         authService: AuthService,
         tokenManager: ITokenManager
     ): HttpClient {
-        return HttpClient(CIO) {
+        return HttpClient(OkHttp) {
+            engine {
+                config {
+                    retryOnConnectionFailure(true)
+
+                    connectionPool(
+                        okhttp3.ConnectionPool(
+                            5,
+                            5, java.util.concurrent.TimeUnit.MINUTES
+                        )
+                    )
+
+                    connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                }
+            }
             install(ContentNegotiation) {
                 json(json)
             }
+            install(HttpTimeout) {
+                requestTimeoutMillis = 15000
+                connectTimeoutMillis = 10000
+                socketTimeoutMillis = 10000
+            }
             install(Logging) {
-                logger = Logger.DEFAULT
-                level = LogLevel.ALL
+                level = LogLevel.NONE
             }
             install(Auth) {
                 bearer {
@@ -123,11 +164,31 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideWebSocketClient(): WebSocketHolder {
-        val client = HttpClient(CIO) {
+        val client =  HttpClient(OkHttp) {
+            engine {
+                config {
+                    retryOnConnectionFailure(true)
+
+                    connectionPool(
+                        okhttp3.ConnectionPool(
+                            5,
+                            5, java.util.concurrent.TimeUnit.MINUTES
+                        )
+                    )
+
+                    connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                }
+            }
             install(WebSockets)
+            install(HttpTimeout) {
+                requestTimeoutMillis = 15000
+                connectTimeoutMillis = 10000
+                socketTimeoutMillis = 10000
+            }
             install(Logging) {
-                logger = Logger.DEFAULT
-                level = LogLevel.ALL
+                level = LogLevel.NONE
             }
         }
         return WebSocketHolder(client)

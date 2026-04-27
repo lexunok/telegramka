@@ -161,4 +161,23 @@ class ChatsViewModel @Inject constructor(
     fun clearSearchError() {
         _searchUserError.value = null
     }
+
+    fun updateAvatar(avatar: ByteArray, mimeType: String?) {
+        viewModelScope.launch {
+            val result = profileRepository.updateAvatar(avatar, mimeType)
+            result.fold(
+                onSuccess = { newAvatarUrl ->
+                    val currentState = _uiState.value
+                    if (currentState is ChatsUiState.Success) {
+                        val updatedUser = currentState.currentUser.copy(avatarUrl = newAvatarUrl)
+                        _uiState.value = currentState.copy(currentUser = updatedUser)
+                    }
+                },
+                onFailure = {
+                    Timber.e(it, "Failed to update avatar")
+                    // Optionally, expose an error state to the UI
+                }
+            )
+        }
+    }
 }

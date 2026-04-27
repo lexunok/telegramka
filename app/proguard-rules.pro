@@ -33,3 +33,8 @@
     <methods>;
 }
 -keepnames class kotlinx.serialization.internal.*
+
+-dontwarn java.lang.management.**
+
+# SLF4J (чтобы R8 не падал)
+-dontwarn org.slf4j.**

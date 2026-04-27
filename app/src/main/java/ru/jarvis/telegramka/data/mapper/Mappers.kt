@@ -39,7 +39,8 @@ fun UserDto.toDomain(): User {
         id = this.id,
         name = this.name,
         email = this.email,
-        nickname = this.nickname
+        nickname = this.nickname,
+        avatarUrl = this.avatarUrl
     )
 }
 
