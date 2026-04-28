@@ -195,7 +195,6 @@ fun ChatsScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .statusBarsPadding()
                             .background(MaterialTheme.colorScheme.background)
                     ) {
                         TopBar(

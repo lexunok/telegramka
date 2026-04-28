@@ -106,7 +106,7 @@ fun VerifyCodeScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
                 .padding(32.dp)
-                .padding(top = 64.dp),
+                .padding(top = 16.dp),
             contentAlignment = Alignment.TopCenter
         ) {
             AnimatedVisibility(
