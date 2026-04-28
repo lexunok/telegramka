@@ -21,9 +21,13 @@ class ChatRepository @Inject constructor(private val chatService: ChatService) {
         }
     }
 
-    suspend fun getMessages(chatId: String): Result<List<Message>> {
+    suspend fun getMessages(
+        chatId: String,
+        before: Long? = null,
+        limit: Int? = null
+    ): Result<List<Message>> {
         return try {
-            val messageDtos = chatService.getMessages(chatId)
+            val messageDtos = chatService.getMessages(chatId, before = before, limit = limit)
             val messages = messageDtos.map { it.toDomain() }
             Result.success(messages)
         } catch (e: Exception) {

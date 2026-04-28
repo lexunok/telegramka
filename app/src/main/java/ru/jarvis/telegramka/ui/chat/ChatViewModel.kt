@@ -15,7 +15,11 @@ import java.util.UUID
 import javax.inject.Inject
 
 sealed interface ChatUiState {
-    data class Success(val messages: List<Message>) : ChatUiState
+    data class Success(
+        val messages: List<Message>,
+        val isLoadingMore: Boolean = false,
+        val hasMore: Boolean = true
+    ) : ChatUiState
     data class Error(val message: String) : ChatUiState
     object Loading : ChatUiState
 }
@@ -25,6 +29,9 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val realtimeChatManager: RealtimeChatManager
 ) : ViewModel() {
+    private companion object {
+        const val PAGE_SIZE = 500
+    }
 
     private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Loading)
     val uiState = _uiState.asStateFlow()
@@ -32,13 +39,15 @@ class ChatViewModel @Inject constructor(
     private val _chatId = MutableStateFlow<String?>(null)
     private var currentUserId: String? = null
     private var messageCollectorJob: Job? = null
+    private var isLoadingMoreMessages = false
 
     fun initialize(id: String, currentUserId: String) {
         if (_chatId.value == id && this.currentUserId == currentUserId) return
 
         _chatId.value = id
         this.currentUserId = currentUserId
-        loadMessages(id)
+        isLoadingMoreMessages = false
+        loadInitialMessages(id)
 
         messageCollectorJob?.cancel()
         messageCollectorJob = viewModelScope.launch {
@@ -60,13 +69,19 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun loadMessages(id: String) {
+    private fun loadInitialMessages(id: String) {
         viewModelScope.launch {
             _uiState.value = ChatUiState.Loading
             try {
-                val result = chatRepository.getMessages(id)
+                val result = chatRepository.getMessages(id, limit = PAGE_SIZE)
                 result.fold(
-                    onSuccess = { _uiState.value = ChatUiState.Success(it) },
+                    onSuccess = {
+                        _uiState.value = ChatUiState.Success(
+                            messages = it,
+                            isLoadingMore = false,
+                            hasMore = it.size >= PAGE_SIZE
+                        )
+                    },
                     onFailure = {
                         Timber.w(it, "Failed to load messages for chat id: %s", id)
                         _uiState.value = ChatUiState.Error(it.message ?: "Failed to load messages")
@@ -75,6 +90,54 @@ class ChatViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load messages for chat id: %s", id)
                 _uiState.value = ChatUiState.Error(e.message ?: "An unexpected error occurred")
+            }
+        }
+    }
+
+    fun loadOlderMessages() {
+        val id = _chatId.value ?: return
+        val currentState = _uiState.value as? ChatUiState.Success ?: return
+        if (currentState.isLoadingMore || !currentState.hasMore || isLoadingMoreMessages) return
+
+        val oldestTimestamp = currentState.messages.firstOrNull()?.timestamp ?: return
+        isLoadingMoreMessages = true
+        _uiState.value = currentState.copy(isLoadingMore = true)
+
+        viewModelScope.launch {
+            try {
+                val result = chatRepository.getMessages(
+                    chatId = id,
+                    before = oldestTimestamp,
+                    limit = PAGE_SIZE
+                )
+                result.fold(
+                    onSuccess = { olderMessages ->
+                        val latestState = _uiState.value as? ChatUiState.Success
+                        if (latestState != null) {
+                            val mergedMessages = olderMessages.mergeOlderMessages(latestState.messages)
+                            _uiState.value = latestState.copy(
+                                messages = mergedMessages,
+                                isLoadingMore = false,
+                                hasMore = olderMessages.size >= PAGE_SIZE
+                            )
+                        }
+                    },
+                    onFailure = { exception ->
+                        val latestState = _uiState.value as? ChatUiState.Success
+                        if (latestState != null) {
+                            _uiState.value = latestState.copy(isLoadingMore = false)
+                        }
+                        Timber.w(exception, "Failed to load older messages for chat id: %s", id)
+                    }
+                )
+            } catch (e: Exception) {
+                val latestState = _uiState.value as? ChatUiState.Success
+                if (latestState != null) {
+                    _uiState.value = latestState.copy(isLoadingMore = false)
+                }
+                Timber.e(e, "Failed to load older messages for chat id: %s", id)
+            } finally {
+                isLoadingMoreMessages = false
             }
         }
     }
@@ -121,7 +184,7 @@ class ChatViewModel @Inject constructor(
         val currentState = _uiState.value
         if (currentState is ChatUiState.Error) {
             _uiState.value = ChatUiState.Loading
-            loadMessages(_chatId.value ?: return)
+            loadInitialMessages(_chatId.value ?: return)
         }
     }
 
@@ -162,8 +225,16 @@ class ChatViewModel @Inject constructor(
 private fun List<Message>.reconcileIncomingMessage(incomingMessage: Message): List<Message> {
     val existingIndex = indexOfFirst { it.id == incomingMessage.id }
     if (existingIndex >= 0) {
-        return toMutableList().also { it[existingIndex] = incomingMessage }
+        return toMutableList().also { it[existingIndex] = incomingMessage }.sortedBy { it.timestamp }
     }
 
-    return this + incomingMessage
+    return (this + incomingMessage).sortedBy { it.timestamp }
+}
+
+private fun List<Message>.mergeOlderMessages(currentMessages: List<Message>): List<Message> {
+    if (isEmpty()) return currentMessages
+    val existingIds = currentMessages.asSequence().map { it.id }.toHashSet()
+    val uniqueOlderMessages = filterNot { it.id in existingIds }
+    if (uniqueOlderMessages.isEmpty()) return currentMessages
+    return (uniqueOlderMessages + currentMessages).sortedBy { it.timestamp }
 }

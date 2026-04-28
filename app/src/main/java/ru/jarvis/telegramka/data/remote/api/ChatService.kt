@@ -11,6 +11,7 @@ import ru.jarvis.telegramka.data.remote.model.MessageDto
 import ru.jarvis.telegramka.data.remote.model.SendMessageRequest
 import ru.jarvis.telegramka.di.AuthClient
 import timber.log.Timber
+import java.time.Instant
 import javax.inject.Inject
 
 class ChatService @Inject constructor(
@@ -28,8 +29,15 @@ class ChatService @Inject constructor(
         }
     }
 
-    suspend fun getMessages(chatId: String): List<MessageDto> {
-        val response = client.get("$baseUrl/chats/$chatId/messages")
+    suspend fun getMessages(chatId: String, before: Long? = null, limit: Int? = null): List<MessageDto> {
+        val response = client.get("$baseUrl/chats/$chatId/messages") {
+            before?.let {
+                parameter("before", Instant.ofEpochMilli(it).toString())
+            }
+            limit?.let {
+                parameter("limit", it)
+            }
+        }
         if (response.status == HttpStatusCode.OK) {
             return response.body()
         } else {

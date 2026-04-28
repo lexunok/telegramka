@@ -48,6 +48,8 @@ import ru.jarvis.telegramka.ui.utils.UserAvatar
 import java.text.SimpleDateFormat
 import java.util.*
 
+private const val LoadingMoreItemKey = "loading-more"
+
 @Composable
 fun ChatScreen(
     navController: NavController,
@@ -77,6 +79,7 @@ fun ChatScreen(
     var previousMessageCount by remember(id) { mutableIntStateOf(0) }
     var wasAtBottom by remember(id) { mutableStateOf(true) }
     var lastMessageId by remember(id) { mutableStateOf<String?>(null) }
+    var paginationAnchor by remember(id) { mutableStateOf<PaginationAnchor?>(null) }
 
     LaunchedEffect(id, currentUserId) {
         viewModel.initialize(id, currentUserId)
@@ -85,6 +88,46 @@ fun ChatScreen(
     LaunchedEffect(listState) {
         snapshotFlow { listState.isAtBottom() }
             .collect { atBottom -> wasAtBottom = atBottom }
+    }
+
+    LaunchedEffect(listState, successState?.hasMore, successState?.isLoadingMore, chatItems.size) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (firstVisibleItemIndex, firstVisibleItemScrollOffset) ->
+                val state = uiState as? ChatUiState.Success ?: return@collect
+                if (
+                    firstVisibleItemIndex <= 3 &&
+                    state.hasMore &&
+                    !state.isLoadingMore &&
+                    state.messages.isNotEmpty()
+                ) {
+                    val anchorItem = listState.layoutInfo.visibleItemsInfo
+                        .firstOrNull()
+                        ?: return@collect
+                    paginationAnchor = PaginationAnchor(
+                        itemKey = anchorItem.key,
+                        firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+                        oldestMessageId = state.messages.firstOrNull()?.id
+                    )
+                    viewModel.loadOlderMessages()
+                }
+            }
+    }
+
+    SideEffect {
+        val anchor = paginationAnchor ?: return@SideEffect
+        val oldestMessageId = successState?.messages?.firstOrNull()?.id
+        if (oldestMessageId != null && oldestMessageId != anchor.oldestMessageId) {
+            val targetIndex = buildChatItemKeys(chatItems).indexOf(anchor.itemKey)
+            if (targetIndex >= 0) {
+                listState.requestScrollToItem(
+                    index = targetIndex,
+                    scrollOffset = anchor.firstVisibleItemScrollOffset
+                )
+            }
+            paginationAnchor = null
+        } else if (successState?.isLoadingMore == false) {
+            paginationAnchor = null
+        }
     }
 
     LaunchedEffect(successState?.messages?.lastOrNull()?.id) {
@@ -167,33 +210,53 @@ fun ChatScreen(
                     // Error is shown in snackbar, content area can be empty or show a placeholder
                 }
                 is ChatUiState.Success -> {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                    ) {
-                        if (chatItems.isEmpty()) {
-                            item {
-                                EmptyChatPlaceholder()
-                            }
-                        } else {
-                            itemsIndexed(
-                                items = chatItems,
-                                key = { index, item ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                        ) {
+                            if (chatItems.isEmpty()) {
+                                item {
+                                    EmptyChatPlaceholder()
+                                }
+                            } else {
+                                itemsIndexed(
+                                    items = chatItems,
+                                    key = { _, item ->
+                                        when (item) {
+                                            is ChatListItem.Date -> dateItemKey(item.timestamp)
+                                            is ChatListItem.MessageItem -> item.message.id
+                                        }
+                                    }
+                                ) { _, item ->
                                     when (item) {
-                                        is ChatListItem.Date -> "date-${item.timestamp}-$index"
-                                        is ChatListItem.MessageItem -> item.message.id
+                                        is ChatListItem.Date -> DateSeparator(timestamp = item.timestamp)
+                                        is ChatListItem.MessageItem -> MessageItem(
+                                            message = item.message,
+                                            currentUserId = currentUserId
+                                        )
                                     }
                                 }
-                            ) { _, item ->
-                                when (item) {
-                                    is ChatListItem.Date -> DateSeparator(timestamp = item.timestamp)
-                                    is ChatListItem.MessageItem -> MessageItem(
-                                        message = item.message,
-                                        currentUserId = currentUserId
+                            }
+                        }
+                        if (state.isLoadingMore) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = 12.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                        shape = RoundedCornerShape(999.dp)
                                     )
-                                }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
                             }
                         }
                     }
@@ -202,6 +265,12 @@ fun ChatScreen(
         }
     }
 }
+
+private data class PaginationAnchor(
+    val itemKey: Any,
+    val firstVisibleItemScrollOffset: Int,
+    val oldestMessageId: String?
+)
 
 private fun LazyListState.isAtBottom(): Boolean {
     val totalItemsCount = layoutInfo.totalItemsCount
@@ -228,6 +297,27 @@ private fun List<Message>.toChatListItems(): List<ChatListItem> {
         result += ChatListItem.MessageItem(message)
     }
     return result
+}
+
+private fun buildChatItemKeys(items: List<ChatListItem>): List<Any> {
+    return items.map { item ->
+        when (item) {
+            is ChatListItem.Date -> dateItemKey(item.timestamp)
+            is ChatListItem.MessageItem -> item.message.id
+        }
+    }
+}
+
+private fun dateItemKey(timestamp: Long): String = "date-${startOfDay(timestamp)}"
+
+private fun startOfDay(timestamp: Long): Long {
+    val calendar = Calendar.getInstance()
+    calendar.timeInMillis = timestamp
+    calendar.set(Calendar.HOUR_OF_DAY, 0)
+    calendar.set(Calendar.MINUTE, 0)
+    calendar.set(Calendar.SECOND, 0)
+    calendar.set(Calendar.MILLISECOND, 0)
+    return calendar.timeInMillis
 }
 
 @Composable

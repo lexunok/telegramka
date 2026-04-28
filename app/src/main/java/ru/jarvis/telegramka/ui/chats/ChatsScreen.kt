@@ -349,7 +349,7 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
                 .fillMaxWidth()
                 .clickable(
                     interactionSource = interactionSource,
-                    indication = ripple(),
+                    indication = null,
                     onClick = onClick
                 )
                 .padding(horizontal = 16.dp, vertical = 12.dp),
