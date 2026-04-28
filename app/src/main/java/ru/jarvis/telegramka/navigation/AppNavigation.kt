@@ -102,15 +102,21 @@ fun AppNavigation() {
                 navArgument("id") { type = NavType.StringType },
                 navArgument("name") { type = NavType.StringType; nullable = true },
                 navArgument("nickname") { type = NavType.StringType; nullable = true },
-                navArgument("currentUserId") { type = NavType.StringType; nullable = true }
+                navArgument("currentUserId") { type = NavType.StringType; nullable = true },
+                navArgument("avatarUrl") { type = NavType.StringType; nullable = true }
             ),
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id")
             val name = backStackEntry.arguments?.getString("name")
             val nickname = backStackEntry.arguments?.getString("nickname")
             val currentUserId = backStackEntry.arguments?.getString("currentUserId")
+            var avatarUrl = backStackEntry.arguments?.getString("avatarUrl")
+            if (avatarUrl == "null") {
+                avatarUrl = null
+            }
+
             if (id != null && name != null && nickname != null && currentUserId != null) {
-                ChatScreen(navController, id, name, nickname, currentUserId)
+                ChatScreen(navController, id, name, nickname, currentUserId, avatarUrl)
             }
         }
     }

@@ -34,6 +34,12 @@
 }
 -keepnames class kotlinx.serialization.internal.*
 
+# Ktor references java.lang.management classes for debugging, which are not available on Android.
+-dontwarn java.lang.management.**
+
+# Ktor uses SLF4J for logging. This rule prevents R8 from failing if no SLF4J implementation is found.
+-dontwarn org.slf4j.impl.**
+
 -dontwarn java.lang.management.**
 
 # SLF4J (чтобы R8 не падал)

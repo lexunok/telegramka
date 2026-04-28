@@ -27,16 +27,24 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.domain.model.Message
 import ru.jarvis.telegramka.ui.theme.TelegramkaTheme
+import ru.jarvis.telegramka.ui.utils.UserAvatar
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -47,6 +55,7 @@ fun ChatScreen(
     name: String,
     nickname: String,
     currentUserId: String,
+    avatarUrl: String?,
     viewModel: ChatViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -112,6 +121,7 @@ fun ChatScreen(
             ChatHeader(
                 name = name,
                 nickname = nickname,
+                avatarUrl = avatarUrl,
                 onBack = { navController.popBackStack() }
             )
         },
@@ -221,7 +231,8 @@ private fun List<Message>.toChatListItems(): List<ChatListItem> {
 }
 
 @Composable
-fun ChatHeader(name: String, nickname: String, onBack: () -> Unit) {
+fun ChatHeader(name: String, nickname: String, avatarUrl: String?, onBack: () -> Unit) {
+    val baseUrl = BuildConfig.API_BASE_URL
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp
@@ -255,30 +266,12 @@ fun ChatHeader(name: String, nickname: String, onBack: () -> Unit) {
                         Text(text = "@$nickname", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
-                Box(
-                    modifier = Modifier
-                        .width(48.dp),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    colors = listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = name.firstOrNull()?.uppercase() ?: "",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
+                UserAvatar(
+                    avatarUrl = avatarUrl,
+                    name = name,
+                    baseUrl = baseUrl,
+                    size = 40.dp
+                )
             }
         }
     }
@@ -288,6 +281,12 @@ fun ChatHeader(name: String, nickname: String, onBack: () -> Unit) {
 fun MessageItem(message: Message, currentUserId: String) {
     val isCurrentUser = message.senderId == currentUserId
     val horizontalArrangement = if (isCurrentUser) Arrangement.End else Arrangement.Start
+    val contentColor = if (isCurrentUser) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+    val metaColor = contentColor.copy(alpha = 0.7f)
     val bubbleShape = if (isCurrentUser) {
         RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp)
     } else {
@@ -318,26 +317,28 @@ fun MessageItem(message: Message, currentUserId: String) {
                 .clip(bubbleShape)
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
-            Column {
+            Box {
                 Text(
                     text = message.text,
-                    color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                    color = contentColor,
+                    modifier = Modifier.padding(
+                        end = if (isCurrentUser) 56.dp else 40.dp
+                    )
                 )
-                Spacer(modifier = Modifier.height(4.dp))
                 Row(
-                    modifier = Modifier.align(Alignment.End),
+                    modifier = Modifier.align(Alignment.BottomEnd),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = formatMessageTime(message.timestamp),
                         style = MaterialTheme.typography.bodySmall,
-                        color = (if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface).copy(alpha = 0.7f)
+                        color = metaColor
                     )
                     if (isCurrentUser) {
                         val statusTint = when {
                             message.isFailed -> MaterialTheme.colorScheme.error
-                            else -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            else -> metaColor
                         }
                         Icon(
                             imageVector = when {
@@ -359,6 +360,7 @@ fun MessageItem(message: Message, currentUserId: String) {
         }
     }
 }
+
 
 @Composable
 fun MessageInput(value: String, onValueChange: (String) -> Unit, onSend: () -> Unit) {
@@ -508,6 +510,6 @@ private fun isSameDay(timestamp1: Long, timestamp2: Long): Boolean {
 @Composable
 fun ChatScreenPreview() {
     TelegramkaTheme {
-        ChatScreen(navController = rememberNavController(), id = "1", name = "Test User", nickname = "testuser", currentUserId = "myUserId")
+        ChatScreen(navController = rememberNavController(), id = "1", name = "Test User", nickname = "testuser", currentUserId = "myUserId", avatarUrl = null)
     }
 }

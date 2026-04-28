@@ -11,11 +11,12 @@ sealed class Screen(val route: String) {
         fun createRoute(email: String) = "verify/${Uri.encode(email)}"
     }
     object Chats : Screen("chats")
-    object Chat : Screen("chat/{id}?name={name}&nickname={nickname}&currentUserId={currentUserId}") {
-        fun createRoute(id: String, name: String, nickname: String, currentUserId: String): String {
+    object Chat : Screen("chat/{id}?name={name}&nickname={nickname}&currentUserId={currentUserId}&avatarUrl={avatarUrl}") {
+        fun createRoute(id: String, name: String, nickname: String, currentUserId: String, avatarUrl: String?): String {
             val encodedName = Uri.encode(name)
             val encodedNickname = Uri.encode(nickname)
-            return "chat/$id?name=$encodedName&nickname=$encodedNickname&currentUserId=$currentUserId"
+            val encodedAvatarUrl = avatarUrl?.let { Uri.encode(it) } ?: "null"
+            return "chat/$id?name=$encodedName&nickname=$encodedNickname&currentUserId=$currentUserId&avatarUrl=$encodedAvatarUrl"
         }
     }
 }
