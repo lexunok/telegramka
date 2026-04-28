@@ -5,6 +5,7 @@ import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import ru.jarvis.telegramka.BuildConfig
+import ru.jarvis.telegramka.data.remote.model.AppVersionDto
 import ru.jarvis.telegramka.data.remote.model.ChatDto
 import ru.jarvis.telegramka.data.remote.model.ErrorResponse
 import ru.jarvis.telegramka.data.remote.model.MessageDto
@@ -51,6 +52,16 @@ class ChatService @Inject constructor(
             contentType(ContentType.Application.Json)
             setBody(request)
         }
+        if (response.status == HttpStatusCode.OK) {
+            return response.body()
+        } else {
+            val error = response.body<ErrorResponse>()
+            throw Exception(error.error)
+        }
+    }
+
+    suspend fun getLatestAppVersion(): AppVersionDto {
+        val response = client.get("$baseUrl/files/version")
         if (response.status == HttpStatusCode.OK) {
             return response.body()
         } else {

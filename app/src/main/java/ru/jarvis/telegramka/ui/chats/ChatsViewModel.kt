@@ -6,7 +6,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.domain.model.Chat
 import ru.jarvis.telegramka.domain.model.User
 import ru.jarvis.telegramka.data.remote.RealtimeChatManager
@@ -25,6 +27,17 @@ sealed interface ChatsUiState {
 
 sealed interface ChatsNavigationEvent {
     data class NavigateToChat(val id: String, val name: String, val nickname: String) : ChatsNavigationEvent
+}
+
+data class AppUpdateState(
+    val currentVersion: String = BuildConfig.VERSION_NAME,
+    val latestVersion: String? = null,
+    val isChecking: Boolean = false,
+    val isDownloading: Boolean = false,
+    val errorMessage: String? = null
+) {
+    val isUpdateAvailable: Boolean
+        get() = latestVersion != null && latestVersion != currentVersion
 }
 
 @HiltViewModel
@@ -50,8 +63,12 @@ class ChatsViewModel @Inject constructor(
     private val _navigationEvent = MutableStateFlow<ChatsNavigationEvent?>(null)
     val navigationEvent = _navigationEvent.asStateFlow()
 
+    private val _appUpdateState = MutableStateFlow(AppUpdateState(isChecking = true))
+    val appUpdateState = _appUpdateState.asStateFlow()
+
     init {
         loadData()
+        checkAppVersion()
         realtimeChatManager.connect()
         viewModelScope.launch {
             realtimeChatManager.incomingMessages.collect { message ->
@@ -160,6 +177,59 @@ class ChatsViewModel @Inject constructor(
 
     fun clearSearchError() {
         _searchUserError.value = null
+    }
+
+    fun checkAppVersion() {
+        viewModelScope.launch {
+            _appUpdateState.update {
+                it.copy(isChecking = true, errorMessage = null)
+            }
+            val result = chatRepository.getLatestAppVersion()
+            result.fold(
+                onSuccess = { latestVersion ->
+                    _appUpdateState.update {
+                        it.copy(
+                            latestVersion = latestVersion,
+                            isChecking = false,
+                            errorMessage = null
+                        )
+                    }
+                },
+                onFailure = { exception ->
+                    Timber.w(exception, "Failed to check app version")
+                    _appUpdateState.update {
+                        it.copy(
+                            isChecking = false,
+                            errorMessage = exception.message ?: "Не удалось проверить обновление"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun onAppUpdateDownloadStarted() {
+        _appUpdateState.update {
+            it.copy(isDownloading = true, errorMessage = null)
+        }
+    }
+
+    fun onAppUpdateDownloadFinished() {
+        _appUpdateState.update {
+            it.copy(isDownloading = false)
+        }
+    }
+
+    fun onAppUpdateDownloadFailed(message: String) {
+        _appUpdateState.update {
+            it.copy(isDownloading = false, errorMessage = message)
+        }
+    }
+
+    fun consumeAppUpdateError() {
+        _appUpdateState.update {
+            it.copy(errorMessage = null)
+        }
     }
 
     fun updateAvatar(avatar: ByteArray, mimeType: String?) {

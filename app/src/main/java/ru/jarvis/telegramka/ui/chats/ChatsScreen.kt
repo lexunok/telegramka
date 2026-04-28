@@ -1,6 +1,13 @@
 package ru.jarvis.telegramka.ui.chats
 
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -43,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import androidx.core.content.ContextCompat
 import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.domain.model.Chat
 import ru.jarvis.telegramka.domain.model.User
@@ -64,10 +72,14 @@ fun ChatsScreen(
     val isSearchingUser by viewModel.isSearchingUser.collectAsStateWithLifecycle()
     val searchUserError by viewModel.searchUserError.collectAsStateWithLifecycle()
     val navigationEvent by viewModel.navigationEvent.collectAsStateWithLifecycle()
+    val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
 
     var showDialog by remember { mutableStateOf(false) }
+    var activeDownloadId by remember { mutableLongStateOf(-1L) }
+    var infoMessage by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -77,6 +89,56 @@ fun ChatsScreen(
                 val mimeType = context.contentResolver.getType(it)
                 viewModel.updateAvatar(byteArray, mimeType)
             }
+        }
+    }
+
+    LaunchedEffect(appUpdateState.errorMessage) {
+        val message = appUpdateState.errorMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.consumeAppUpdateError()
+    }
+
+    LaunchedEffect(infoMessage) {
+        val message = infoMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        infoMessage = null
+    }
+
+    DisposableEffect(context, activeDownloadId) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: Intent) {
+                if (intent.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+                val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                if (downloadId != activeDownloadId || downloadId == -1L) return
+
+                activeDownloadId = -1L
+                handleApkDownloadCompleted(
+                    context = receiverContext,
+                    downloadId = downloadId,
+                    onSuccess = {
+                        viewModel.onAppUpdateDownloadFinished()
+                        infoMessage = "Загрузка завершена"
+                    },
+                    onInstallerOpened = {
+                        infoMessage = "Открываю установщик"
+                    },
+                    onInstallPermissionRequired = {
+                        infoMessage = "Разреши установку приложений для Telegramka"
+                    },
+                    onFailure = { message ->
+                        viewModel.onAppUpdateDownloadFailed(message)
+                    }
+                )
+            }
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose {
+            context.unregisterReceiver(receiver)
         }
     }
 
@@ -103,64 +165,88 @@ fun ChatsScreen(
         }
     }
 
-    AnimatedContent(
-        targetState = uiState,
-        transitionSpec = {
-            (fadeIn(animationSpec = tween(AppMotion.ContentDuration))) togetherWith (fadeOut(animationSpec = tween(AppMotion.ExitDuration)))
-        }, label = "MainContent"
-    ) { state ->
-        when (state) {
-            is ChatsUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(AppMotion.ContentDuration))) togetherWith (fadeOut(animationSpec = tween(AppMotion.ExitDuration)))
+            },
+            label = "MainContent",
+            modifier = Modifier.padding(paddingValues)
+        ) { state ->
+            when (state) {
+                is ChatsUiState.Loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
                 }
-            }
-            is ChatsUiState.Error -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = state.message, color = MaterialTheme.colorScheme.error)
+                is ChatsUiState.Error -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = state.message, color = MaterialTheme.colorScheme.error)
+                    }
                 }
-            }
-            is ChatsUiState.Success -> {
-                val filteredChats = state.chats.filter {
-                    it.name.contains(searchQuery, ignoreCase = true) ||
-                            it.nickname.contains(searchQuery, ignoreCase = true)
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .background(MaterialTheme.colorScheme.background)
-                ) {
-                    TopBar(
-                        user = state.currentUser,
-                        onAddContact = { showDialog = true },
-                        onLogout = {
-                            viewModel.onLogout()
-                            navController.navigate(Screen.Login.route) {
-                                popUpTo(Screen.Chats.route) { inclusive = true }
-                            }
-                        },
-                        onUpdateAvatar = {
-                            imagePickerLauncher.launch("image/*")
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SearchBar(
-                        query = searchQuery,
-                        onQueryChanged = { viewModel.onSearchQueryChanged(it) }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                is ChatsUiState.Success -> {
+                    val filteredChats = state.chats.filter {
+                        it.name.contains(searchQuery, ignoreCase = true) ||
+                                it.nickname.contains(searchQuery, ignoreCase = true)
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        TopBar(
+                            user = state.currentUser,
+                            onAddContact = { showDialog = true },
+                            onLogout = {
+                                viewModel.onLogout()
+                                navController.navigate(Screen.Login.route) {
+                                    popUpTo(Screen.Chats.route) { inclusive = true }
+                                }
+                            },
+                            onUpdateAvatar = {
+                                imagePickerLauncher.launch("image/*")
+                            },
+                            onUpdateApplication = {
+                                val latestVersion = appUpdateState.latestVersion ?: return@TopBar
+                                val downloadId = startApkDownload(context, latestVersion)
+                                if (downloadId == null) {
+                                    viewModel.onAppUpdateDownloadFailed("Не удалось начать загрузку APK")
+                                } else {
+                                    activeDownloadId = downloadId
+                                    viewModel.onAppUpdateDownloadStarted()
+                                    infoMessage = "Загрузка обновления началась"
+                                }
+                            },
+                            isUpdateEnabled = appUpdateState.isUpdateAvailable && !appUpdateState.isDownloading,
+                            isUpdateChecking = appUpdateState.isChecking,
+                            isUpdateDownloading = appUpdateState.isDownloading,
+                            latestVersion = appUpdateState.latestVersion
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SearchBar(
+                            query = searchQuery,
+                            onQueryChanged = { viewModel.onSearchQueryChanged(it) }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    if (filteredChats.isEmpty()) {
-                        EmptyChatsView()
-                    } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(filteredChats, key = { it.id }) { chat ->
-                                ChatListItem(chat = chat) {
-                                    navController.navigate(Screen.Chat.createRoute(chat.id, chat.name, chat.nickname, state.currentUser.id, chat.avatarUrl))
+                        if (filteredChats.isEmpty()) {
+                            EmptyChatsView()
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(filteredChats, key = { it.id }) { chat ->
+                                    ChatListItem(chat = chat) {
+                                        navController.navigate(Screen.Chat.createRoute(chat.id, chat.name, chat.nickname, state.currentUser.id, chat.avatarUrl))
+                                    }
                                 }
                             }
                         }
+                    }
+                    if (appUpdateState.isDownloading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
@@ -183,9 +269,25 @@ fun ChatsScreen(
 }
 
 @Composable
-fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit, onUpdateAvatar: () -> Unit) {
+fun TopBar(
+    user: User,
+    onAddContact: () -> Unit,
+    onLogout: () -> Unit,
+    onUpdateAvatar: () -> Unit,
+    onUpdateApplication: () -> Unit,
+    isUpdateEnabled: Boolean,
+    isUpdateChecking: Boolean,
+    isUpdateDownloading: Boolean,
+    latestVersion: String?
+) {
     var showMenu by remember { mutableStateOf(false) }
     val baseUrl = BuildConfig.API_BASE_URL
+    val updateMenuLabel = when {
+        isUpdateDownloading -> "Скачивание обновления..."
+        isUpdateChecking -> "Проверка обновления..."
+        isUpdateEnabled && latestVersion != null -> "Обновить до $latestVersion"
+        else -> "Приложение актуально"
+    }
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
@@ -242,9 +344,12 @@ fun TopBar(user: User, onAddContact: () -> Unit, onLogout: () -> Unit, onUpdateA
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Обновить приложение", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-                        onClick = { /*TODO*/ },
-                        enabled = false,
+                        text = { Text(updateMenuLabel, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                        onClick = {
+                            onUpdateApplication()
+                            showMenu = false
+                        },
+                        enabled = isUpdateEnabled,
                         colors = MenuDefaults.itemColors(
                             disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         )
@@ -425,6 +530,105 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
             }
         }
     }
+}
+
+private const val ApkMimeType = "application/vnd.android.package-archive"
+
+private fun startApkDownload(context: Context, version: String): Long? {
+    val downloadManager = context.getSystemService(DownloadManager::class.java) ?: return null
+    val fileName = "telegramka-$version.apk"
+    val request = DownloadManager.Request(
+        Uri.parse("${BuildConfig.API_BASE_URL}/release/download/$version.apk")
+    )
+        .setMimeType(ApkMimeType)
+        .setTitle("Telegramka $version")
+        .setDescription("Загрузка обновления приложения")
+        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+        .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
+
+    return runCatching { downloadManager.enqueue(request) }.getOrNull()
+}
+
+private fun handleApkDownloadCompleted(
+    context: Context,
+    downloadId: Long,
+    onSuccess: () -> Unit,
+    onInstallerOpened: () -> Unit,
+    onInstallPermissionRequired: () -> Unit,
+    onFailure: (String) -> Unit
+) {
+    val downloadManager = context.getSystemService(DownloadManager::class.java)
+    if (downloadManager == null) {
+        onFailure("DownloadManager недоступен")
+        return
+    }
+
+    val query = DownloadManager.Query().setFilterById(downloadId)
+    val cursor = downloadManager.query(query)
+    cursor.use {
+        if (!it.moveToFirst()) {
+            onFailure("Не удалось получить статус загрузки")
+            return
+        }
+
+        val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+            val apkUri = downloadManager.getUriForDownloadedFile(downloadId)
+            if (apkUri == null) {
+                onFailure("APK скачан, но не удалось открыть установщик")
+                return
+            }
+
+            onSuccess()
+            installDownloadedApk(
+                context = context,
+                apkUri = apkUri,
+                onInstallerOpened = onInstallerOpened,
+                onInstallPermissionRequired = onInstallPermissionRequired,
+                onFailure = onFailure
+            )
+            return
+        }
+
+        onFailure("Не удалось скачать обновление")
+    }
+}
+
+private fun installDownloadedApk(
+    context: Context,
+    apkUri: Uri,
+    onInstallerOpened: () -> Unit,
+    onInstallPermissionRequired: () -> Unit,
+    onFailure: (String) -> Unit
+) {
+    if (!context.packageManager.canRequestPackageInstalls()) {
+        openUnknownSourcesSettings(context)
+        onInstallPermissionRequired()
+        return
+    }
+
+    val installIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(apkUri, ApkMimeType)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching {
+        context.startActivity(installIntent)
+    }.onSuccess {
+        onInstallerOpened()
+    }.onFailure {
+        onFailure("Не удалось открыть установщик APK")
+    }
+}
+
+private fun openUnknownSourcesSettings(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+        Uri.parse("package:${context.packageName}")
+    ).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
 }
 
 @Composable

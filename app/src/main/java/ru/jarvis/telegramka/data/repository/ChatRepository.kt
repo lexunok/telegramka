@@ -46,4 +46,14 @@ class ChatRepository @Inject constructor(private val chatService: ChatService) {
             Result.failure(e)
         }
     }
+
+    suspend fun getLatestAppVersion(): Result<String> {
+        return try {
+            val version = chatService.getLatestAppVersion().version
+            Result.success(version)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get latest app version")
+            Result.failure(e)
+        }
+    }
 }
