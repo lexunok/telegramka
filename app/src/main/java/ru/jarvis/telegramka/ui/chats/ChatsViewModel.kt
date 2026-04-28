@@ -232,9 +232,9 @@ class ChatsViewModel @Inject constructor(
         }
     }
 
-    fun updateAvatar(avatar: ByteArray, mimeType: String?) {
+    fun updateAvatar(avatar: ByteArray) {
         viewModelScope.launch {
-            val result = profileRepository.updateAvatar(avatar, mimeType)
+            val result = profileRepository.updateAvatar(avatar)
             result.fold(
                 onSuccess = { newAvatarUrl ->
                     val currentState = _uiState.value

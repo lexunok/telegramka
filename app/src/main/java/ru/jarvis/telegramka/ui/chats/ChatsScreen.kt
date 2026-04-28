@@ -86,8 +86,7 @@ fun ChatsScreen(
         uri?.let {
             context.contentResolver.openInputStream(it)?.use { inputStream ->
                 val byteArray = inputStream.readBytes()
-                val mimeType = context.contentResolver.getType(it)
-                viewModel.updateAvatar(byteArray, mimeType)
+                viewModel.updateAvatar(byteArray)
             }
         }
     }
