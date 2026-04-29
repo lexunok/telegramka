@@ -99,14 +99,16 @@ fun AppNavigation() {
         composable(
             route = Screen.Chat.route,
             arguments = listOf(
-                navArgument("id") { type = NavType.StringType },
+                navArgument("chatId") { type = NavType.StringType; nullable = true },
+                navArgument("userId") { type = NavType.StringType; nullable = true },
                 navArgument("name") { type = NavType.StringType; nullable = true },
                 navArgument("nickname") { type = NavType.StringType; nullable = true },
                 navArgument("currentUserId") { type = NavType.StringType; nullable = true },
                 navArgument("avatarUrl") { type = NavType.StringType; nullable = true }
             ),
         ) { backStackEntry ->
-            val id = backStackEntry.arguments?.getString("id")
+            val chatId = backStackEntry.arguments?.getString("chatId")?.takeIf { it.isNotBlank() }
+            val userId = backStackEntry.arguments?.getString("userId")?.takeIf { it.isNotBlank() }
             val name = backStackEntry.arguments?.getString("name")
             val nickname = backStackEntry.arguments?.getString("nickname")
             val currentUserId = backStackEntry.arguments?.getString("currentUserId")
@@ -115,8 +117,8 @@ fun AppNavigation() {
                 avatarUrl = null
             }
 
-            if (id != null && name != null && nickname != null && currentUserId != null) {
-                ChatScreen(navController, id, name, nickname, currentUserId, avatarUrl)
+            if ((chatId != null || userId != null) && name != null && nickname != null && currentUserId != null) {
+                ChatScreen(navController, chatId, userId, name, nickname, currentUserId, avatarUrl)
             }
         }
     }

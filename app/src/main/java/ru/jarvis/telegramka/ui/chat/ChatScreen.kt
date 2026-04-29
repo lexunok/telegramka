@@ -54,7 +54,8 @@ private const val LoadingMoreItemKey = "loading-more"
 @Composable
 fun ChatScreen(
     navController: NavController,
-    id: String,
+    chatId: String?,
+    userId: String?,
     name: String,
     nickname: String,
     currentUserId: String,
@@ -63,12 +64,13 @@ fun ChatScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val successState = uiState as? ChatUiState.Success
+    val conversationKey = chatId ?: "user:${userId.orEmpty()}"
     val chatItems = remember(successState?.messages) {
         successState?.messages?.toChatListItems().orEmpty()
     }
     var messageText by remember { mutableStateOf("") }
     val listState = if (successState != null) {
-        remember(id) {
+        remember(conversationKey) {
             LazyListState(
                 firstVisibleItemIndex = chatItems.lastIndex.coerceAtLeast(0)
             )
@@ -77,13 +79,13 @@ fun ChatScreen(
         rememberLazyListState()
     }
     val snackbarHostState = remember { SnackbarHostState() }
-    var previousMessageCount by remember(id) { mutableIntStateOf(0) }
-    var wasAtBottom by remember(id) { mutableStateOf(true) }
-    var lastMessageId by remember(id) { mutableStateOf<String?>(null) }
-    var paginationAnchor by remember(id) { mutableStateOf<PaginationAnchor?>(null) }
+    var previousMessageCount by remember(conversationKey) { mutableIntStateOf(0) }
+    var wasAtBottom by remember(conversationKey) { mutableStateOf(true) }
+    var lastMessageId by remember(conversationKey) { mutableStateOf<String?>(null) }
+    var paginationAnchor by remember(conversationKey) { mutableStateOf<PaginationAnchor?>(null) }
 
-    LaunchedEffect(id, currentUserId) {
-        viewModel.initialize(id, currentUserId)
+    LaunchedEffect(chatId, userId, currentUserId) {
+        viewModel.initialize(chatId, userId, currentUserId)
     }
 
     LaunchedEffect(listState) {
@@ -592,6 +594,14 @@ private fun isSameDay(timestamp1: Long, timestamp2: Long): Boolean {
 @Composable
 fun ChatScreenPreview() {
     TelegramkaTheme {
-        ChatScreen(navController = rememberNavController(), id = "1", name = "Test User", nickname = "testuser", currentUserId = "myUserId", avatarUrl = null)
+        ChatScreen(
+            navController = rememberNavController(),
+            chatId = "1",
+            userId = null,
+            name = "Test User",
+            nickname = "testuser",
+            currentUserId = "myUserId",
+            avatarUrl = null
+        )
     }
 }

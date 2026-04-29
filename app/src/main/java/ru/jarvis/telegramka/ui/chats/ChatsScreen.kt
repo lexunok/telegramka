@@ -150,11 +150,12 @@ fun ChatsScreen(
                         showDialog = false
                         navController.navigate(
                             Screen.Chat.createRoute(
-                                id = event.id,
+                                chatId = event.chatId,
+                                userId = event.userId,
                                 name = event.name,
                                 nickname = event.nickname,
                                 currentUserId = uiStateValue.currentUser.id,
-                                avatarUrl = (uiStateValue.chats.find { it.id == event.id })?.avatarUrl
+                                avatarUrl = event.avatarUrl
                             )
                         )
                     }
@@ -237,7 +238,16 @@ fun ChatsScreen(
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
                                 items(filteredChats, key = { it.id }) { chat ->
                                     ChatListItem(chat = chat) {
-                                        navController.navigate(Screen.Chat.createRoute(chat.id, chat.name, chat.nickname, state.currentUser.id, chat.avatarUrl))
+                                        navController.navigate(
+                                            Screen.Chat.createRoute(
+                                                chatId = chat.id,
+                                                userId = null,
+                                                name = chat.name,
+                                                nickname = chat.nickname,
+                                                currentUserId = state.currentUser.id,
+                                                avatarUrl = chat.avatarUrl
+                                            )
+                                        )
                                     }
                                 }
                             }

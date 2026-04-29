@@ -11,12 +11,21 @@ sealed class Screen(val route: String) {
         fun createRoute(email: String) = "verify/${Uri.encode(email)}"
     }
     object Chats : Screen("chats")
-    object Chat : Screen("chat/{id}?name={name}&nickname={nickname}&currentUserId={currentUserId}&avatarUrl={avatarUrl}") {
-        fun createRoute(id: String, name: String, nickname: String, currentUserId: String, avatarUrl: String?): String {
+    object Chat : Screen("chat?chatId={chatId}&userId={userId}&name={name}&nickname={nickname}&currentUserId={currentUserId}&avatarUrl={avatarUrl}") {
+        fun createRoute(
+            chatId: String?,
+            userId: String?,
+            name: String,
+            nickname: String,
+            currentUserId: String,
+            avatarUrl: String?
+        ): String {
+            val encodedChatId = chatId?.let { Uri.encode(it) } ?: ""
+            val encodedUserId = userId?.let { Uri.encode(it) } ?: ""
             val encodedName = Uri.encode(name)
             val encodedNickname = Uri.encode(nickname)
             val encodedAvatarUrl = avatarUrl?.let { Uri.encode(it) } ?: "null"
-            return "chat/$id?name=$encodedName&nickname=$encodedNickname&currentUserId=$currentUserId&avatarUrl=$encodedAvatarUrl"
+            return "chat?chatId=$encodedChatId&userId=$encodedUserId&name=$encodedName&nickname=$encodedNickname&currentUserId=$currentUserId&avatarUrl=$encodedAvatarUrl"
         }
     }
 }

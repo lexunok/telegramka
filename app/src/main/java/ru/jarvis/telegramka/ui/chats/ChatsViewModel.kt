@@ -26,7 +26,13 @@ sealed interface ChatsUiState {
 }
 
 sealed interface ChatsNavigationEvent {
-    data class NavigateToChat(val id: String, val name: String, val nickname: String) : ChatsNavigationEvent
+    data class NavigateToChat(
+        val chatId: String? = null,
+        val userId: String? = null,
+        val name: String,
+        val nickname: String,
+        val avatarUrl: String? = null
+    ) : ChatsNavigationEvent
 }
 
 data class AppUpdateState(
@@ -138,10 +144,17 @@ class ChatsViewModel @Inject constructor(
     fun findUser(nickname: String) {
         val currentState = _uiState.value
         if (currentState is ChatsUiState.Success) {
-            val ownNickname = currentState.currentUser.nickname
             val enteredNickname = nickname.removePrefix("@")
+            val ownNickname = currentState.currentUser.nickname
             if (ownNickname.equals(enteredNickname, ignoreCase = true)) {
                 _searchUserError.value = "Да это же вы)"
+                return
+            }
+            val chatAlreadyExists = currentState.chats.any {
+                it.nickname.equals(enteredNickname, ignoreCase = true)
+            }
+            if (chatAlreadyExists) {
+                _searchUserError.value = "Такой чат уже существует"
                 return
             }
         }
@@ -155,7 +168,12 @@ class ChatsViewModel @Inject constructor(
 
                 result.fold(
                     onSuccess = { foundUser ->
-                        _navigationEvent.value = ChatsNavigationEvent.NavigateToChat(foundUser.id, foundUser.name, foundUser.nickname)
+                        _navigationEvent.value = ChatsNavigationEvent.NavigateToChat(
+                            userId = foundUser.id,
+                            name = foundUser.name,
+                            nickname = foundUser.nickname,
+                            avatarUrl = foundUser.avatarUrl
+                        )
                     },
                     onFailure = {
                         Timber.w(it, "User not found for nickname: %s", cleanedNickname)

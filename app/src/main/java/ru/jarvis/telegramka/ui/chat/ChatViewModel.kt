@@ -37,17 +37,27 @@ class ChatViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     private val _chatId = MutableStateFlow<String?>(null)
+    private var targetUserId: String? = null
     private var currentUserId: String? = null
     private var messageCollectorJob: Job? = null
     private var isLoadingMoreMessages = false
 
-    fun initialize(id: String, currentUserId: String) {
-        if (_chatId.value == id && this.currentUserId == currentUserId) return
+    fun initialize(chatId: String?, userId: String?, currentUserId: String) {
+        if (_chatId.value == chatId && targetUserId == userId && this.currentUserId == currentUserId) return
 
-        _chatId.value = id
+        _chatId.value = chatId
+        targetUserId = userId
         this.currentUserId = currentUserId
         isLoadingMoreMessages = false
-        loadInitialMessages(id)
+        if (chatId != null) {
+            loadInitialMessages(chatId)
+        } else {
+            _uiState.value = ChatUiState.Success(
+                messages = emptyList(),
+                isLoadingMore = false,
+                hasMore = false
+            )
+        }
 
         messageCollectorJob?.cancel()
         messageCollectorJob = viewModelScope.launch {
@@ -143,12 +153,14 @@ class ChatViewModel @Inject constructor(
     }
 
     fun sendMessage(text: String) {
-        val idToSend = _chatId.value ?: return
+        val chatId = _chatId.value
+        val userId = targetUserId
+        if (chatId == null && userId == null) return
         val senderId = currentUserId ?: return
         val messageId = UUID.randomUUID().toString()
         val optimisticMessage = Message(
             id = messageId,
-            chatId = idToSend,
+            chatId = chatId ?: userId.orEmpty(),
             senderId = senderId,
             text = text,
             timestamp = System.currentTimeMillis(),
@@ -160,22 +172,23 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val result = chatRepository.sendMessage(idToSend, messageId, text)
+                val result = chatRepository.sendMessage(chatId, userId, messageId, text)
                 result.fold(
                     onSuccess = { sentMessage ->
                         replaceMessage(optimisticMessage.id, sentMessage)
-                        if (idToSend != sentMessage.chatId) {
+                        if (chatId != sentMessage.chatId) {
                             _chatId.value = sentMessage.chatId
                         }
+                        targetUserId = null
                     },
                     onFailure = { exception ->
                         markMessageAsFailed(optimisticMessage.id)
-                        Timber.w(exception, "Failed to send message to id: %s", idToSend)
+                        Timber.w(exception, "Failed to send message to chatId=%s userId=%s", chatId, userId)
                     }
                 )
             } catch (e: Exception) {
                 markMessageAsFailed(optimisticMessage.id)
-                Timber.e(e, "Failed to send message to id: %s", idToSend)
+                Timber.e(e, "Failed to send message to chatId=%s userId=%s", chatId, userId)
             }
         }
     }
