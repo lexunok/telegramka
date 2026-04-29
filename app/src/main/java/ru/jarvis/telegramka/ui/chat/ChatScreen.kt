@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Mood
 import androidx.compose.material.icons.filled.Schedule
@@ -86,6 +87,12 @@ fun ChatScreen(
 
     LaunchedEffect(chatId, userId, currentUserId) {
         viewModel.initialize(chatId, userId, currentUserId)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.onScreenDisposed()
+        }
     }
 
     LaunchedEffect(listState) {
@@ -167,6 +174,8 @@ fun ChatScreen(
             ChatHeader(
                 name = name,
                 nickname = nickname,
+                isOnline = successState?.otherUserOnline == true,
+                isTyping = successState?.isOtherUserTyping == true,
                 avatarUrl = avatarUrl,
                 onBack = { navController.popBackStack() }
             )
@@ -174,7 +183,10 @@ fun ChatScreen(
         bottomBar = {
             MessageInput(
                 value = messageText,
-                onValueChange = { messageText = it },
+                onValueChange = {
+                    messageText = it
+                    viewModel.onMessageInputChanged(it)
+                },
                 onSend = {
                     if (messageText.isNotBlank()) {
                         viewModel.sendMessage(messageText)
@@ -324,7 +336,14 @@ private fun startOfDay(timestamp: Long): Long {
 }
 
 @Composable
-fun ChatHeader(name: String, nickname: String, avatarUrl: String?, onBack: () -> Unit) {
+fun ChatHeader(
+    name: String,
+    nickname: String,
+    isOnline: Boolean,
+    isTyping: Boolean,
+    avatarUrl: String?,
+    onBack: () -> Unit
+) {
     val baseUrl = BuildConfig.API_BASE_URL
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -348,7 +367,16 @@ fun ChatHeader(name: String, nickname: String, avatarUrl: String?, onBack: () ->
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(text = name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                    Text(text = "@$nickname", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    val subtitle = when {
+                        isTyping -> "печатает..."
+                        isOnline -> "@$nickname · online"
+                        else -> "@$nickname · offline"
+                    }
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isTyping) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
+                    )
                 }
                 UserAvatar(
                     avatarUrl = avatarUrl,
@@ -422,17 +450,20 @@ fun MessageItem(message: Message, currentUserId: String) {
                     if (isCurrentUser) {
                         val statusTint = when {
                             message.isFailed -> MaterialTheme.colorScheme.error
+                            message.isRead -> MaterialTheme.colorScheme.tertiary
                             else -> metaColor
                         }
                         Icon(
                             imageVector = when {
                                 message.isFailed -> Icons.Default.ErrorOutline
                                 message.isPending -> Icons.Default.Schedule
+                                message.isRead -> Icons.Default.DoneAll
                                 else -> Icons.Default.Check
                             },
                             contentDescription = when {
                                 message.isFailed -> "Не отправлено"
                                 message.isPending -> "Отправляется"
+                                message.isRead -> "Прочитано"
                                 else -> "Доставлено"
                             },
                             modifier = Modifier.size(14.dp),

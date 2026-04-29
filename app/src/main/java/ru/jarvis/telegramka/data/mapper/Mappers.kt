@@ -30,7 +30,8 @@ fun ChatDto.toDomain(): Chat {
         lastMessage = this.lastMessage,
         lastMessageTime = this.lastMessageTime?.let { parseRfc3339(it) },
         unread = this.unread,
-        avatarUrl = this.avatarUrl
+        avatarUrl = this.avatarUrl,
+        userId = this.userId
     )
 }
 

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -12,6 +13,7 @@ import ru.jarvis.telegramka.BuildConfig
 import ru.jarvis.telegramka.domain.model.Chat
 import ru.jarvis.telegramka.domain.model.User
 import ru.jarvis.telegramka.data.remote.RealtimeChatManager
+import ru.jarvis.telegramka.data.remote.RealtimeSnapshot
 import ru.jarvis.telegramka.data.repository.ChatRepository
 import ru.jarvis.telegramka.data.repository.ProfileRepository
 import ru.jarvis.telegramka.data.repository.TokenRepository
@@ -71,6 +73,7 @@ class ChatsViewModel @Inject constructor(
 
     private val _appUpdateState = MutableStateFlow(AppUpdateState(isChecking = true))
     val appUpdateState = _appUpdateState.asStateFlow()
+    val realtimeSnapshot: StateFlow<RealtimeSnapshot> = realtimeChatManager.state
 
     init {
         loadData()
@@ -85,7 +88,10 @@ class ChatsViewModel @Inject constructor(
                         if (chatExists) {
                             val updatedChats = currentState.chats.map { chat ->
                                 if (chat.id == message.chatId) {
-                                    chat.copy(lastMessage = message.text, lastMessageTime = message.timestamp)
+                                    chat.copy(
+                                        lastMessage = message.text,
+                                        lastMessageTime = message.timestamp
+                                    )
                                 } else {
                                     chat
                                 }
@@ -100,6 +106,15 @@ class ChatsViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            realtimeChatManager.state.collect { snapshot ->
+                val currentState = _uiState.value as? ChatsUiState.Success ?: return@collect
+                val updatedChats = currentState.chats.map { chat ->
+                    chat.copy(unread = snapshot.unreadByChat[chat.id] ?: chat.unread)
+                }.sortedByDescending { it.lastMessageTime }
+                _uiState.value = currentState.copy(chats = updatedChats)
+            }
+        }
     }
 
     private fun loadData() {
@@ -112,11 +127,15 @@ class ChatsViewModel @Inject constructor(
                 val chatsResult = chatsDeferred.await()
                 val profileResult = profileDeferred.await()
 
-                val chats = chatsResult.getOrNull()?.sortedByDescending { it.lastMessageTime }
+                val chats = chatsResult.getOrNull()
                 val profile = profileResult.getOrNull()
 
                 if (chats != null && profile != null) {
-                    _uiState.value = ChatsUiState.Success(chats, profile)
+                    realtimeChatManager.setCurrentUserId(profile.id)
+                    _uiState.value = ChatsUiState.Success(
+                        chats.sortedByDescending { it.lastMessageTime },
+                        profile
+                    )
                 } else {
                     val errorMessage = chatsResult.exceptionOrNull()?.message
                         ?: profileResult.exceptionOrNull()?.message

@@ -7,5 +7,6 @@ data class Chat(
     val lastMessage: String? = null,
     val lastMessageTime: Long? = null,
     val unread: Int? = null,
-    val avatarUrl: String? = null
+    val avatarUrl: String? = null,
+    val userId: String? = null
 )

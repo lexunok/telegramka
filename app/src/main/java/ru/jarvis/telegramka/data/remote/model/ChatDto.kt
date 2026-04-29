@@ -10,5 +10,6 @@ data class ChatDto(
     val lastMessage: String?,
     val lastMessageTime: String?,
     val unread: Int,
-    val avatarUrl: String?
+    val avatarUrl: String?,
+    val userId: String? = null
 )

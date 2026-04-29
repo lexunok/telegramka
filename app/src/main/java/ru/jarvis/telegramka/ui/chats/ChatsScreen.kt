@@ -73,6 +73,7 @@ fun ChatsScreen(
     val searchUserError by viewModel.searchUserError.collectAsStateWithLifecycle()
     val navigationEvent by viewModel.navigationEvent.collectAsStateWithLifecycle()
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
+    val realtimeSnapshot by viewModel.realtimeSnapshot.collectAsStateWithLifecycle()
 
     var showDialog by remember { mutableStateOf(false) }
     var activeDownloadId by remember { mutableLongStateOf(-1L) }
@@ -237,18 +238,27 @@ fun ChatsScreen(
                         } else {
                             LazyColumn(modifier = Modifier.fillMaxSize()) {
                                 items(filteredChats, key = { it.id }) { chat ->
-                                    ChatListItem(chat = chat) {
-                                        navController.navigate(
-                                            Screen.Chat.createRoute(
-                                                chatId = chat.id,
-                                                userId = null,
-                                                name = chat.name,
-                                                nickname = chat.nickname,
-                                                currentUserId = state.currentUser.id,
-                                                avatarUrl = chat.avatarUrl
+                                    val isOnline = chat.userId?.let(realtimeSnapshot.onlineUserIds::contains) == true
+                                    val isTyping = chat.userId?.let {
+                                        realtimeSnapshot.typingByChat[chat.id].orEmpty().contains(it)
+                                    } == true
+                                    ChatListItem(
+                                        chat = chat,
+                                        onClick = {
+                                            navController.navigate(
+                                                Screen.Chat.createRoute(
+                                                    chatId = chat.id,
+                                                    userId = chat.userId,
+                                                    name = chat.name,
+                                                    nickname = chat.nickname,
+                                                    currentUserId = state.currentUser.id,
+                                                    avatarUrl = chat.avatarUrl
+                                                )
                                             )
-                                        )
-                                    }
+                                        },
+                                        isOnline = isOnline,
+                                        isTyping = isTyping
+                                    )
                                 }
                             }
                         }
@@ -451,7 +461,7 @@ fun EmptyChatsView() {
 }
 
 @Composable
-fun ChatListItem(chat: Chat, onClick: () -> Unit) {
+fun ChatListItem(chat: Chat, onClick: () -> Unit, isOnline: Boolean, isTyping: Boolean) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val baseUrl = BuildConfig.API_BASE_URL
@@ -483,17 +493,30 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text(
-                        text = chat.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.SemiBold,
+                    Row(
                         modifier = Modifier
                             .weight(1f)
                             .padding(end = 8.dp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isOnline) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF2ECC71))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = chat.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     chat.lastMessageTime?.let {
                         Text(
                             text = formatTime(it),
@@ -509,9 +532,9 @@ fun ChatListItem(chat: Chat, onClick: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = chat.lastMessage ?: chat.nickname,
+                        text = if (isTyping) "печатает..." else chat.lastMessage ?: chat.nickname,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isTyping) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)

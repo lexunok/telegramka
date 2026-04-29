@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -17,6 +18,9 @@ import javax.inject.Inject
 sealed interface ChatUiState {
     data class Success(
         val messages: List<Message>,
+        val otherUserOnline: Boolean = false,
+        val isOtherUserTyping: Boolean = false,
+        val otherUserLastReadAt: Long? = null,
         val isLoadingMore: Boolean = false,
         val hasMore: Boolean = true
     ) : ChatUiState
@@ -40,6 +44,9 @@ class ChatViewModel @Inject constructor(
     private var targetUserId: String? = null
     private var currentUserId: String? = null
     private var messageCollectorJob: Job? = null
+    private var realtimeStateCollectorJob: Job? = null
+    private var typingStopJob: Job? = null
+    private var isTypingSent = false
     private var isLoadingMoreMessages = false
 
     fun initialize(chatId: String?, userId: String?, currentUserId: String) {
@@ -49,11 +56,16 @@ class ChatViewModel @Inject constructor(
         targetUserId = userId
         this.currentUserId = currentUserId
         isLoadingMoreMessages = false
+        realtimeChatManager.setCurrentUserId(currentUserId)
+        realtimeChatManager.setActiveChat(chatId)
         if (chatId != null) {
             loadInitialMessages(chatId)
         } else {
             _uiState.value = ChatUiState.Success(
                 messages = emptyList(),
+                otherUserOnline = false,
+                isOtherUserTyping = false,
+                otherUserLastReadAt = null,
                 isLoadingMore = false,
                 hasMore = false
             )
@@ -77,6 +89,47 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
+
+        realtimeStateCollectorJob?.cancel()
+        realtimeStateCollectorJob = viewModelScope.launch {
+            realtimeChatManager.state.collect { snapshot ->
+                val currentState = _uiState.value as? ChatUiState.Success ?: return@collect
+                val resolvedChatId = _chatId.value
+                val otherUserId = targetUserId
+
+                val isOtherUserTyping = resolvedChatId != null &&
+                    otherUserId != null &&
+                    snapshot.typingByChat[resolvedChatId].orEmpty().contains(otherUserId)
+
+                val otherUserOnline = otherUserId != null && snapshot.onlineUserIds.contains(otherUserId)
+                val otherUserLastReadAt = if (resolvedChatId != null && otherUserId != null) {
+                    snapshot.lastReadByChatUser[resolvedChatId]?.get(otherUserId)
+                } else {
+                    null
+                }
+
+                val updatedMessages = currentState.messages.map { message ->
+                    if (
+                        message.senderId == currentUserId &&
+                        !message.isPending &&
+                        !message.isFailed &&
+                        otherUserLastReadAt != null &&
+                        message.timestamp <= otherUserLastReadAt
+                    ) {
+                        message.copy(isRead = true)
+                    } else {
+                        message
+                    }
+                }
+
+                _uiState.value = currentState.copy(
+                    messages = updatedMessages,
+                    otherUserOnline = otherUserOnline,
+                    isOtherUserTyping = isOtherUserTyping,
+                    otherUserLastReadAt = otherUserLastReadAt
+                )
+            }
+        }
     }
 
     private fun loadInitialMessages(id: String) {
@@ -88,9 +141,13 @@ class ChatViewModel @Inject constructor(
                     onSuccess = {
                         _uiState.value = ChatUiState.Success(
                             messages = it,
+                            otherUserOnline = false,
+                            isOtherUserTyping = false,
+                            otherUserLastReadAt = null,
                             isLoadingMore = false,
                             hasMore = it.size >= PAGE_SIZE
                         )
+                        markChatAsReadIfNeeded()
                     },
                     onFailure = {
                         Timber.w(it, "Failed to load messages for chat id: %s", id)
@@ -154,41 +211,45 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage(text: String) {
         val chatId = _chatId.value
-        val userId = targetUserId
-        if (chatId == null && userId == null) return
+        val otherUserId = targetUserId
+        val requestUserId = if (chatId == null) otherUserId else null
+        if (chatId == null && requestUserId == null) return
+        stopTyping()
         val senderId = currentUserId ?: return
         val messageId = UUID.randomUUID().toString()
         val optimisticMessage = Message(
             id = messageId,
-            chatId = chatId ?: userId.orEmpty(),
+            chatId = chatId ?: requestUserId.orEmpty(),
             senderId = senderId,
             text = text,
             timestamp = System.currentTimeMillis(),
             isPending = true,
-            isFailed = false
+            isFailed = false,
+            isRead = false
         )
 
         appendOptimisticMessage(optimisticMessage)
 
         viewModelScope.launch {
             try {
-                val result = chatRepository.sendMessage(chatId, userId, messageId, text)
+                val result = chatRepository.sendMessage(chatId, requestUserId, messageId, text)
                 result.fold(
                     onSuccess = { sentMessage ->
                         replaceMessage(optimisticMessage.id, sentMessage)
                         if (chatId != sentMessage.chatId) {
                             _chatId.value = sentMessage.chatId
+                            realtimeChatManager.setActiveChat(sentMessage.chatId)
                         }
-                        targetUserId = null
+                        markChatAsReadIfNeeded()
                     },
                     onFailure = { exception ->
                         markMessageAsFailed(optimisticMessage.id)
-                        Timber.w(exception, "Failed to send message to chatId=%s userId=%s", chatId, userId)
+                        Timber.w(exception, "Failed to send message to chatId=%s userId=%s", chatId, requestUserId)
                     }
                 )
             } catch (e: Exception) {
                 markMessageAsFailed(optimisticMessage.id)
-                Timber.e(e, "Failed to send message to chatId=%s userId=%s", chatId, userId)
+                Timber.e(e, "Failed to send message to chatId=%s userId=%s", chatId, requestUserId)
             }
         }
     }
@@ -199,6 +260,30 @@ class ChatViewModel @Inject constructor(
             _uiState.value = ChatUiState.Loading
             loadInitialMessages(_chatId.value ?: return)
         }
+    }
+
+    fun onMessageInputChanged(text: String) {
+        val chatId = _chatId.value ?: return
+        if (text.isBlank()) {
+            stopTyping()
+            return
+        }
+
+        if (!isTypingSent) {
+            realtimeChatManager.sendTyping(chatId, true)
+            isTypingSent = true
+        }
+
+        typingStopJob?.cancel()
+        typingStopJob = viewModelScope.launch {
+            delay(2500)
+            stopTyping()
+        }
+    }
+
+    fun onScreenDisposed() {
+        stopTyping()
+        realtimeChatManager.setActiveChat(null)
     }
 
     private fun appendOptimisticMessage(message: Message) {
@@ -231,6 +316,28 @@ class ChatViewModel @Inject constructor(
                     }
                 }
             )
+        }
+    }
+
+    private fun stopTyping() {
+        typingStopJob?.cancel()
+        typingStopJob = null
+        val chatId = _chatId.value
+        if (chatId != null && isTypingSent) {
+            realtimeChatManager.sendTyping(chatId, false)
+        }
+        isTypingSent = false
+    }
+
+    private fun markChatAsReadIfNeeded() {
+        val chatId = _chatId.value ?: return
+        val currentState = _uiState.value as? ChatUiState.Success ?: return
+        val myUserId = currentUserId ?: return
+        val hasUnreadIncomingMessages = currentState.messages.any { message ->
+            message.senderId != myUserId && !message.isPending && !message.isFailed
+        }
+        if (hasUnreadIncomingMessages) {
+            realtimeChatManager.markRead(chatId)
         }
     }
 }
